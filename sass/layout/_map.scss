@@ -261,22 +261,17 @@ $mapWrapperMaxWidth:     $mapWidth + 35px;
     &.jsplumb-overlay{
       opacity: 0 !important; // hide opacity on hover
     }
-
-    &:not(.jsplumb-overlay){
-      @include bounce-up-down; // label should not bounce
-    }
   }
 
   // hover effect for systems
   .jsplumb-target-hover, .jsplumb-source-hover{
-    @include bounce-up-down;
     @include box-shadow(0 6px 12px rgba(0,0,0,.3));
   }
 
   // ==========================================================================
   .pf-system{
     position: absolute;
-    min-width: 60px;
+    min-width: 100px;
     height: auto;
     overflow: hidden; // hide bg on round corners -_-
     background-color: $gray-dark;
@@ -299,7 +294,6 @@ $mapWrapperMaxWidth:     $mapWidth + 35px;
     &:hover{
       // makes the systems "flying" :)
       @include box-shadow(0 6px 12px rgba(0,0,0, 0.3));
-      @include transform( translate3d(0, -2px, 0) );
     }
 
     .pf-system-head{
@@ -312,9 +306,19 @@ $mapWrapperMaxWidth:     $mapWidth + 35px;
       .pf-system-head-name{
         border: none;
         display: inline-block;
-        min-width: 41px;
+        width: 56px;
         color: $gray-lighter;
-        margin-right: 2px;
+        margin-bottom: -5px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .pf-system-head-name-short {
+        width: 42px;
+      }
+
+      .pf-system-head-name-long {
+        width: 76px;
       }
 
       .pf-system-effect{
@@ -341,16 +345,15 @@ $mapWrapperMaxWidth:     $mapWidth + 35px;
     // ========================================================================
 
     .pf-system-body{
-      height: 0px;
+      height: auto;
       width: 100%;
       overflow: hidden;
       cursor: -moz-grab;
       cursor: -webkit-grab;
       cursor: grab;
-      padding: 0 4px;
+      padding: 1px 4px 0 4px;
       white-space: nowrap;
-      display: none;  // triggered by JS
-      will-change: width;
+      font-size: 11px;
 
       border: {
         top: {
@@ -360,35 +363,30 @@ $mapWrapperMaxWidth:     $mapWidth + 35px;
         }
       }
 
-      .pf-system-body-item{
-        color: lighten($gray-light, 10%);
-        font-size: 10px;
-        line-height: 16px;
-        height: 16px;
+      .pf-system-body-pilots{
+        height: 14px;
+        color: darken($gray-lighter, 15%);
+        transition: color 0.3s ease-out;
+        cursor: help;
 
-        .pf-system-body-right{
-          text-overflow: ellipsis;
-          float: right;
-          color: $orange-light;
-          display: none; // hover effect
-        }
-        // user status ========================================================
-        .pf-user-status{
-          font-size: 7px;
-          width: 10px;
-          vertical-align: middle;
-          height: 14px;
-        }
-
-        .pf-system-body-item-name{
-          display: inline-block;
-          width: 65px;
-          overflow: hidden;
-          white-space: nowrap;
-          text-overflow: ellipsis;
+        i {
+          margin-right: 4px;
         }
       }
 
+      .pf-system-body-pilots-increase{
+        color: $green-dark;
+      }
+      .pf-system-body-pilots-decrease{
+        color: $red;
+      }
+
+      .pf-system-body-static{
+        float: right;
+        margin-left: 4px;
+        opacity: 0.7;
+        cursor: help;
+      }
     }
 
     // system head specific tooltip style
