@@ -8,15 +8,16 @@
 }
 
 .pf-icon-dotlan{
-  background: inline-image("#{$base-url}/icons/dotlan_logo.png");
+  background: inline-image("/icons/dotlan_logo.png");
   width: 17px;
   height: 17px;
   opacity: 0.8;
   margin: -5px 0px 0 10px;
 }
 
+
 .pf-icon-anoik-is{
-  background: inline-image("#{$base-url}/icons/anoik_is_logo.png");
+  background: inline-image("/icons/anoik_is_logo.png");
   width: 17px;
   height: 17px;
   opacity: 0.8;
