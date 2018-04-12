@@ -701,13 +701,13 @@ class Setup extends Controller {
             $gitOut = $composerOut = $rubyOut = $rubyGemsOut = $compassOut = $nodeOut = $npmOut = [];
             $gitStatus = $composerStatus = $rubyStatus = $rubyGemsStatus = $compassStatus = $nodeStatus = $npmStatus = 1;
 
-            exec('git --version', $gitOut, $gitStatus);
-            exec('composer -V', $composerOut, $composerStatus);
-            exec('ruby -v', $rubyOut, $rubyStatus);
-            exec('gem -v', $rubyGemsOut, $rubyGemsStatus);
-            exec('compass -v', $compassOut, $compassStatus);
-            exec('node -v', $nodeOut, $nodeStatus);
-            exec('npm -v', $npmOut, $npmStatus);
+            exec('which git > /dev/null && git --version', $gitOut, $gitStatus);
+            exec('which composer > /dev/null && composer -V', $composerOut, $composerStatus);
+            exec('which ruby > /dev/null && ruby -v', $rubyOut, $rubyStatus);
+            exec('which gem > /dev/null && gem -v', $rubyGemsOut, $rubyGemsStatus);
+            exec('which compass > /dev/null && compass -v', $compassOut, $compassStatus);
+            exec('which node > /dev/null && node -v', $nodeOut, $nodeStatus);
+            exec('which npm > /dev/null && npm -v', $npmOut, $npmStatus);
 
             $normalizeVersion = function($version): string {
                 return preg_replace("/[^0-9\.\s]/", '', (string)$version);
