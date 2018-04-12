@@ -1,0 +1,48 @@
+version: '2.3'
+
+services:
+  web:
+    extends:
+      file: docker/nginx.yml
+      service: web
+    container_name: ${COMPOSE_PROJECT_NAME}_web
+    depends_on:
+      - php
+    networks:
+      - net
+    ports:
+      - ${EXPOSE_PORT_HTTP}:80
+      - ${EXPOSE_PORT_HTTPS}:443
+
+  php:
+    extends:
+      file: docker/php.yml
+      service: php
+    container_name: ${COMPOSE_PROJECT_NAME}_php
+    depends_on:
+      - db
+      - redis
+    networks:
+      - net
+
+  db:
+    extends:
+      file: docker/db.yml
+      service: db
+    container_name: ${COMPOSE_PROJECT_NAME}_db
+    networks:
+      - net
+
+  redis:
+    extends:
+      file: docker/redis.yml
+      service: redis
+    container_name: ${COMPOSE_PROJECT_NAME}_redis
+    networks:
+      - net
+
+volumes:
+  db:
+
+networks:
+  net:

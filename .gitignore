@@ -49,6 +49,7 @@ Temporary Items
 .idea
 .sass-cache
 .usage
+.env
 *.gz
 *.lock
 /conf/*.ini

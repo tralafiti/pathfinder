@@ -1,0 +1,3 @@
+# min     hour   dom      mon     dow     command
+#-----------------------------------------------------
+  *       *      *        *       *       cd /var/www/html; php index.php /cron
