@@ -38,13 +38,8 @@ define([
         systemHeadNameClass: 'pf-system-head-name',                     // class for system name
         systemHeadExpandClass: 'pf-system-head-expand',                 // class for system head expand arrow
         systemBodyClass: 'pf-system-body',                              // class for system body
-        systemBodyItemHeight: 16,                                       // px of a system body entry
-        systemBodyItemClass: 'pf-system-body-item',                     // class for a system body entry
-        systemBodyItemStatusClass: 'pf-user-status',                    // class for player status in system body
-        systemBodyItemNameClass: 'pf-system-body-item-name',            // class for player name in system body
-        systemBodyRightClass: 'pf-system-body-right',                   // class for player ship name in system body
-        systemTooltipInnerClass: 'pf-system-tooltip-inner',             // class for system tooltip content
-        systemTooltipInnerIdPrefix: 'pf-system-tooltip-inner-',         // id prefix for system tooltip content
+        systemBodyItemPilots: 'pf-system-body-pilots',                  // class for player status in system body
+        systemBodyItemStatic: 'pf-system-body-static',                  // class for player status in system body
         dynamicElementWrapperId: 'pf-dialog-wrapper',                   // wrapper div for dynamic content (dialogs, context-menus,...)
 
         // endpoint classes
@@ -131,323 +126,61 @@ define([
     $.fn.updateSystemUserData = function(map, data, currentUserIsHere){
 
         let system = $(this);
-        let systemId = system.attr('id');
 
         // find system body
         let systemBody = $( system.find('.' + config.systemBodyClass) );
-
-        // find expand arrow
-        let systemHeadExpand = $( system.find('.' + config.systemHeadExpandClass) );
+        let pilotsContainer = systemBody.find('.' + config.systemBodyItemPilots);
 
         let oldCacheKey = system.data('userCache');
-        let oldUserCount = system.data('userCount');
-        oldUserCount = (oldUserCount !== undefined ? oldUserCount : 0);
+        let oldUserCount = system.data('userCount') || 0;
         let userCounter = 0;
 
         system.data('currentUser', false);
-
         // if current user is in THIS system trigger event
         if(currentUserIsHere){
             system.data('currentUser', true);
         }
 
-        // add user information
-        if(
-            data &&
-            data.user
-        ){
-            let cacheArray = [];
+        let cacheKey = String(currentUserIsHere | 0);
+        if(data && data.user) {
             // loop all active pilots and build cache-key
+            let cacheArray = [];
             for(let i = 0; i < data.user.length; i++){
                 userCounter++;
                 let tempUserData = data.user[i];
                 cacheArray.push(tempUserData.id + '_' + tempUserData.log.ship.id);
             }
-            let cacheKey = cacheArray.join('_');
+            cacheKey += '_' + cacheArray.join('_');
+        }
 
-            // check for if cacheKey has changed
-            if(cacheKey !== oldCacheKey){
-                // set new CacheKey
-                system.data('userCache', cacheKey);
-                system.data('userCount', userCounter);
+        // do we need to update the system?
+        if(cacheKey !== oldCacheKey) {
+            system.data('userCache', cacheKey);
+            system.data('userCount', userCounter);
 
-                // remove all content
-                systemBody.empty();
+            // Show that I'm here
+            let iconCurrentUser = pilotsContainer.find('i.currentUser').clone().toggle(currentUserIsHere);
+            // If I'm not here: Prefix pilot count with icon
+            let iconPilots = pilotsContainer.find('i.pilots').clone().toggle(!currentUserIsHere && userCounter > 1);
+            // If only 1 pilot is in system: display name. Otherwise pilot count
+            let text = userCounter === 0 ? '-' : userCounter === 1 ? data.user[0].name : userCounter;
+            // Update DOM
+            pilotsContainer.text(text).prepend(iconCurrentUser).prepend(iconPilots);
 
-                // loop "again" and build DOM object with user information
-                for(let j = 0; j < data.user.length; j++){
-                    let userData = data.user[j];
-
-                    let statusClass = Util.getStatusInfoForCharacter(userData, 'class');
-                    let userName = userData.name;
-
-                    let item = $('<div>', {
-                        class: config.systemBodyItemClass
-                    }).append(
-                        $('<span>', {
-                            text: userData.log.ship.typeName,
-                            class: config.systemBodyRightClass
-                        })
-                    ).append(
-                        $('<i>', {
-                            class: ['fas', 'fa-circle', config.systemBodyItemStatusClass, statusClass].join(' ')
-                        })
-                    ).append(
-                        $('<span>', {
-                            class: config.systemBodyItemNameClass,
-                            text: userName
-                        })
-                    );
-
-                    systemBody.append(item);
-                }
-
-
-                // ====================================================================================================
-
-                // user count changed -> change tooltip content
-
-                // set tooltip color
-                let highlight = false;
-                let tooltipIconClass = '';
-                if(userCounter > oldUserCount){
-                    highlight = 'good';
-                    tooltipIconClass = 'fa-caret-up';
-                }else if(userCounter < oldUserCount){
-                    highlight = 'bad';
-                    tooltipIconClass = 'fa-caret-down';
-                }
-
-                let tooltipOptions = {
-                    trigger: 'manual',
-                    id: systemId,
-                    highlight: highlight,
-                    title: '<i class="fas ' + tooltipIconClass + '"></i>&nbsp;' + userCounter
-                };
-
-                // show system head
-                systemHeadExpand.velocity('stop', true).velocity({
-                    width: '10px'
-                },{
-                    duration: 50,
-                    display: 'inline-block',
-                    progress: function(){
-                        //revalidate element size and repaint
-                        map.revalidate( systemId );
-                    },
-                    complete: function(){
-                        // show system body
-                        system.toggleBody(true, map, {complete: function(system){
-                            // complete callback function
-                            // show active user tooltip
-                            system.toggleSystemTooltip('show', tooltipOptions);
-                        }});
-                    }
-                });
+            // Update tooltip
+            if(data && data.user) {
+                pilotsContainer.addSystemPilotsTooltip(data.user, true);
+            } else {
+                pilotsContainer.removeTooltip();
             }
-        }else{
-            // no user data found for this system
-            system.data('userCache', false);
-            system.data('userCount', 0);
-            systemBody.empty();
 
-            if(
-                oldCacheKey &&
-                oldCacheKey.length > 0
-            ){
-                // remove tooltip
-                system.toggleSystemTooltip('destroy', {});
-
-                // no user -> clear SystemBody
-                systemHeadExpand.velocity('stop').velocity('reverse',{
-                    display: 'none',
-                    complete: function(){
-                        system.toggleBody(false, map, {});
-                    }
-                });
+            // Highlight if pilot count changed
+            let pilotCountDiff = userCounter - oldUserCount;
+            if(pilotCountDiff !== 0) {
+                let highlight = pilotCountDiff > 0 ? 'pf-system-body-pilots-increase' : 'pf-system-body-pilots-decrease';
+                pilotsContainer.addClass(highlight).delay(15000).queue(() => { pilotsContainer.removeClass(highlight).dequeue(); });
             }
         }
-    };
-
-    /**
-     * show/hide system body element
-     * @param type
-     * @param map
-     * @param callback
-     */
-    $.fn.toggleBody = function(type, map, callback){
-        let system = $(this);
-        let systemBody = system.find('.' + config.systemBodyClass);
-
-        let systemDomId = system.attr('id');
-
-        if(type === true){
-            // show minimal body
-            systemBody.velocity({
-                height: config.systemBodyItemHeight + 'px'
-            },{
-                duration: 50,
-                display: 'auto',
-                progress: function(){
-                    //revalidate element size and repaint
-                    map.revalidate( systemDomId );
-                },
-                complete: function(){
-                    map.revalidate( systemDomId );
-
-                    if(callback.complete){
-                        callback.complete(system);
-                    }
-                }
-            });
-        }else if(type === false){
-            // hide body
-            // remove all inline styles -> possible relict from previous hover-extend
-            systemBody.velocity({
-                height: 0 + 'px',
-                width: '100%',
-                'min-width': 'none'
-            },{
-                duration: 50,
-                display: 'none',
-                begin: function(){
-                },
-                progress: function(){
-                    // revalidate element size and repaint
-                    map.revalidate( systemDomId );
-                },
-                complete: function(){
-                    map.revalidate( systemDomId );
-                }
-            });
-        }
-    };
-
-    /**
-     * show/hide systems tooltip
-     * @param show
-     * @param options
-     */
-    $.fn.toggleSystemTooltip = function(show, options){
-
-        // tooltip colors
-        let colorClasses = {
-            good: 'txt-color-green',
-            bad: 'txt-color-red'
-        };
-
-        return this.each(function(){
-            let system = $(this);
-            let tooltipId = 0;
-            let tooltipClassHighlight = false;
-
-            // do not update tooltips while a system is dragged
-            if(system.hasClass('jsPlumb_dragged')){
-                // skip system
-                return true;
-            }
-
-            if(show === 'destroy'){
-                system.tooltip( show );
-                system.removeAttr('data-original-title');
-            }else if(show === 'hide'){
-                system.tooltip( show );
-            } else if(show === 'toggle'){
-                system.tooltip( show );
-            }else if(show === 'show'){
-
-                // check if tooltip is currently visible
-                let tooltipActive = (system.attr('aria-describedby') !== undefined);
-
-                if(options === undefined){
-                    options = {};
-                }
-
-                // optional color highlight
-                if(colorClasses.hasOwnProperty( options.highlight )){
-                    tooltipClassHighlight = colorClasses[ options.highlight ];
-                }
-
-                if(
-                    tooltipActive === false &&
-                    options.id
-                ){
-
-                    // init new tooltip
-                    tooltipId = config.systemTooltipInnerIdPrefix + options.id;
-
-                    let template = '<div class="tooltip" role="tooltip">' +
-                        '<div class="tooltip-arrow"></div>' +
-                        '<div id="' + tooltipId + '" class="tooltip-inner txt-color ' + config.systemTooltipInnerClass + '"></div>' +
-                        '</div>';
-
-                    options.placement = getSystemTooltipPlacement(system);
-                    options.html = true;
-                    options.animation = true;
-                    options.template = template;
-                    options.viewport = system.parent('.' + config.mapClass);
-
-                    system.attr('title', options.title);
-
-                    system.tooltip(options);
-
-                    system.tooltip(show);
-
-                    if(tooltipClassHighlight !== false){
-                        // set tooltip observer and set new class after open -> due to transition effect
-
-                        system.on('shown.bs.tooltip', function() {
-                            $('#' + tooltipId).addClass( tooltipClassHighlight );
-                            // remove observer -> color should not be changed every time a tooltip toggles e.g. dragging system
-                            $(this).off('shown.bs.tooltip');
-                        });
-                    }
-                }else{
-                    // update/change/toggle tooltip text or color without tooltip reload
-
-                    let tooltipInner = false;
-                    if(
-                        options.title ||
-                        tooltipClassHighlight !== false
-                    ){
-                        tooltipInner = system.tooltip('fixTitle')
-                            .data('bs.tooltip')
-                            .$tip.find('.tooltip-inner');
-
-                        if(options.title){
-                            tooltipInner.html( options.title );
-                        }
-
-                        if(tooltipClassHighlight !== false){
-                            tooltipInner.removeClass( colorClasses.good + ' ' + colorClasses.bad).addClass(tooltipClassHighlight);
-                        }
-                    }
-
-                    // update tooltip placement based on system position
-                    if (system.data('bs.tooltip')) {
-                        system.data('bs.tooltip').options.placement = getSystemTooltipPlacement(system);
-                    }
-
-                    // show() can be forced
-                    if(options.show === true){
-                        system.tooltip('show');
-                    }
-
-                }
-            }
-        });
-    };
-
-    /**
-     * get tooltip position based on current system position
-     * @param system
-     * @returns {string}
-     */
-    let getSystemTooltipPlacement = (system) => {
-        let offsetParent = system.parent().offset();
-        let offsetSystem = system.offset();
-
-        return (offsetSystem.top - offsetParent.top < 27)  ? 'bottom' : 'top';
     };
 
     /**
@@ -500,9 +233,9 @@ define([
 
             // get system info classes
             let effectBasicClass = MapUtil.getEffectInfoForSystem('effect', 'class');
-            let effectName = MapUtil.getEffectInfoForSystem(data.effect, 'name');
             let effectClass = MapUtil.getEffectInfoForSystem(data.effect, 'class');
             let secClass = Util.getSecurityClassForSystem(data.security);
+            let nameClass = Util.getNameClassForSystem(data.locked, data.effect);
 
             system = $('<div>', {
                 // system
@@ -515,7 +248,7 @@ define([
                 }).append(
                     // System name is editable
                     $('<span>', {
-                        class: config.systemHeadNameClass
+                        class: [config.systemHeadNameClass, nameClass].join(' ')
                     }).attr('data-value', systemName)
                 ).append(
                     // System locked status
@@ -526,11 +259,6 @@ define([
                     // System effect color
                     $('<i>', {
                         class: ['fas', 'fa-square ', 'fa-fw', effectBasicClass, effectClass].join(' ')
-                    }).attr('title', effectName)
-                ).append(
-                    // expand option
-                    $('<i>', {
-                        class: ['fas', 'fa-angle-down ', config.systemHeadExpandClass].join(' ')
                     })
                 ).prepend(
                     $('<span>', {
@@ -539,11 +267,48 @@ define([
                     })
                 )
             ).append(
-                // system body
+                // System body
                 $('<div>', {
                     class: config.systemBodyClass
-                })
+                }).append(
+                    // System pilot count
+                    $('<span>', {
+                        class: config.systemBodyItemPilots,
+                        text: '-',
+                    }).prepend(
+                        $('<i>', {
+                            class: ['currentUser', 'fas', 'fa-map-marker-alt', 'txt-color', 'txt-color-teal'].join(' ')
+                        }).hide()
+                    ).prepend(
+                        $('<i>', {
+                            class: ['pilots', 'fas', 'fas fa-circle '].join(' ')
+                        }).hide()
+                    )
+                )
             );
+            
+            // Static infos in system body
+            if(data.statics){
+                system.find('.' + config.systemBodyItemPilots).css('max-width', 88 - 18 * data.statics.length);
+                let systemBody = system.find('.' + config.systemBodyClass);
+                for(let i = 0; i < data.statics.length; i++){
+                    let staticData = data.statics[i];
+                    staticData.class = Util.getSecurityClassForSystem( staticData.security );
+
+                    systemBody.append(
+                        $('<span>', {
+                            class: [config.systemBodyItemStatic, staticData.class].join(' '),
+                            text: staticData.security
+                        }).addWormholeInfoTooltip(staticData, true)
+                    );
+                }
+            }
+
+            // System effect infos
+            if(data.effect){
+                system.find('.' + config.systemHeadClass + ' .' + effectClass)
+                    .addSystemEffectTooltip(data.security, data.effect, true);
+            }
 
             // set initial system position
             system.css({
@@ -571,9 +336,6 @@ define([
                         easing: 'linear',
                         duration: Init.animationSpeed.mapMoveSystem,
                         begin: function(system){
-                            // hide system tooltip
-                            $(system).toggleSystemTooltip('hide', {});
-
                             // move them to the "top"
                             $(system).updateSystemZIndex();
                         },
@@ -581,8 +343,6 @@ define([
                             map.revalidate( systemId );
                         },
                         complete: function(system){
-                            // show tooltip
-                            $(system).toggleSystemTooltip('show', {show: true});
 
                             map.revalidate( systemId );
                         }
@@ -805,19 +565,7 @@ define([
             connection = map.connect({
                 source: sourceSystem[0],
                 target: targetSystem[0],
-                /*
-                 parameters: {
-                 connectionId: connectionId,
-                 updated: connectionData.updated
-                 },
-                 */
                 type: null
-                /* experimental (straight connections)
-                 anchors: [
-                 [ "Perimeter", { shape: 'Rectangle' }],
-                 [ "Perimeter", { shape: 'Rectangle' }]
-                 ]
-                 */
             });
 
             // check if connection is valid (e.g. source/target exist
@@ -2232,9 +1980,6 @@ define([
                 selectedSystems = selectedSystems.concat( dragSystem.get() );
                 selectedSystems = $.unique( selectedSystems );
 
-                // hide tooltip
-                $(selectedSystems).toggleSystemTooltip('hide', {});
-
                 // move them to the "top"
                 $(selectedSystems).updateSystemZIndex();
             },
@@ -2255,9 +2000,6 @@ define([
                 setTimeout(function(){
                     dragSystem.removeClass('no-click');
                 }, Init.timer.DBL_CLICK + 50);
-
-                // show tooltip
-                dragSystem.toggleSystemTooltip('show', {show: true});
 
                 // mark as "changed"
                 dragSystem.markAsChanged();
@@ -2290,88 +2032,6 @@ define([
         if(system.data('locked') === true){
             map.setDraggable(system, false);
         }
-
-        // init system tooltips =======================================================================================
-        let systemTooltipOptions = {
-            toggle: 'tooltip',
-            placement: 'right',
-            container: 'body',
-            viewport: system.id
-        };
-
-        system.find('.fas').tooltip(systemTooltipOptions);
-
-        // init system body expand ====================================================================================
-        systemHeadExpand.hoverIntent(function(e){
-            // hover in
-            let hoverSystem = $(this).parents('.' + config.systemClass);
-            let hoverSystemId = hoverSystem.attr('id');
-
-            // bring system in front (increase zIndex)
-            hoverSystem.updateSystemZIndex();
-
-            // get ship counter and calculate expand height
-            let userCount = parseInt( hoverSystem.data('userCount') );
-
-            let expandHeight = userCount * config.systemBodyItemHeight;
-
-            systemBody.velocity('stop').velocity(
-                {
-                    height: expandHeight + 'px',
-                    width: 150,
-                    'min-width': '150px'
-                },{
-                    easing: 'easeInOutQuart',
-                    duration: 150,
-                    progress: function(){
-                        // repaint connections of current system
-                        map.revalidate( hoverSystemId );
-                    },
-                    complete: function(){
-                        map.revalidate( hoverSystemId );
-
-                        // extend player name element
-                        $(this).find('.' + config.systemBodyItemNameClass).css({width: '80px'});
-
-                        $(this).find('.' + config.systemBodyRightClass).velocity('stop').velocity({
-                            opacity: 1
-                        },{
-                            duration: 150,
-                            display: 'auto'
-                        });
-                    }
-                }
-            );
-
-        }, function(e){
-            // hover out
-            let hoverSystem = $(this).parents('.' + config.systemClass);
-            let hoverSystemId = hoverSystem.attr('id');
-
-            // stop animation (prevent visual bug if user spams hover-icon [in - out])
-            systemBody.velocity('stop');
-
-            // reduce player name element back to "normal" size (css class width is used)
-            systemBody.find('.' + config.systemBodyItemNameClass).css({width: ''});
-
-            systemBody.find('.' + config.systemBodyRightClass).velocity('stop').velocity( {
-                opacity: 0,
-                'min-width': '0px'
-            },{
-                easing: 'easeInOutQuart',
-                duration: 150,
-                display: 'none',
-                complete: function(){
-                    systemBody.velocity('stop').velocity('reverse', {
-                        complete: function(){
-                            // overwrite "complete" function from first "hover"-open
-                            map.revalidate( hoverSystemId );
-                        }
-                    });
-                }
-            });
-
-        });
 
         // context menu ===============================================================================================
 
@@ -2617,9 +2277,12 @@ define([
             }
         }
 
+        // update name class
+        let nameClass = Util.getNameClassForSystem(system.data('locked'), system.data('effect'));
+        system.find('.' + config.systemHeadNameClass).attr('class', [config.systemHeadNameClass, nameClass].join(' ') );
+
         // repaint connections
         map.revalidate( system.attr('id') );
-
 
         if(! hideCounter){
             $(system).getMapOverlay('timer').startMapUpdateCounter();
