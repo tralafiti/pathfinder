@@ -2,8 +2,9 @@ version: '2.3'
 
 services:
   db:
-    image: mariadb:10.2
+    build: db
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     volumes:
-      - db:/var/lib/mysql:delegated
+      - db:/var/lib/mysql:consistent
+      - ./db/mariadb.conf.d:/etc/mysql/mariadb.conf.d:cached
