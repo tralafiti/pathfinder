@@ -749,11 +749,15 @@ define([
                     rowData[0] = parseInt(rowData[0]);
                     // valid dScan result
                     if(structureTypeIds.indexOf( rowData[0] ) !== -1){
-                        dScanData.push({
-                            structureId: rowData[0],
-                            name: rowData[1],
-                            systemId: systemData.systemId
-                        });
+                        let sysNameSplit = rowData[1].indexOf(' - ');
+                        if (systemData.name === rowData[1].substr(0, sysNameSplit)) {
+                            // pushing into the right system
+                            dScanData.push({
+                                structureId: rowData[0],
+                                name: rowData[1].substr(sysNameSplit+3),
+                                systemId: systemData.systemId
+                            });
+                        }
                     }
                 }
             }
