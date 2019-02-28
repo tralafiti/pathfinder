@@ -105,6 +105,17 @@ define([
         let ssoButtonElement = $('.' + config.ssoButtonClass);
         let cookieHintElement = $('#' + config.cookieHintId);
 
+        $(document).on('click', '.' + config.characterSelectionClass + ' a', function(){
+            $('.' + config.splashOverlayClass).showSplashOverlay();
+        });
+
+        $(document).on('click', '.' + config.ssoButtonClass , function(){
+            if(Util.getCookie('cookie') === '1'){
+                // ... cookies accepted no "confirm" shown
+                $('.' + config.splashOverlayClass).showSplashOverlay();
+            }
+        });
+
         // cookie hint --------------------------------------------------------
         cookieHintElement.find('.btn-success').on('click', function(){
             setAcceptCookie();
@@ -112,12 +123,12 @@ define([
             ssoButtonElement.confirmation('destroy');
         });
 
-        cookieHintElement.on('show.bs.collapse', function () {
+        cookieHintElement.on('show.bs.collapse', function(){
             // move admin panel upwards (prevents overlapping with cookie notice)
             moveAdminPanel('up');
         });
 
-        cookieHintElement.on('hidden.bs.collapse', function () {
+        cookieHintElement.on('hidden.bs.collapse', function(){
             moveAdminPanel('down');
         });
 
@@ -194,7 +205,7 @@ define([
         }
 
         // extent "blueimp" gallery for a textFactory method to show HTML templates
-        Gallery.prototype.textFactory = function (obj, callback) {
+        Gallery.prototype.textFactory = function(obj, callback){
             let newSlideContent = $('<div>')
                 .addClass('text-content')
                 .attr('imgTitle', obj.title);
@@ -265,13 +276,14 @@ define([
             titleProperty: 'imgTitle',
             transitionSpeed: 600,
             slideshowInterval: 5000,
-            onopened: function () {
+            preloadRange: 1,
+            onopened: function(){
                 // Callback function executed when the Gallery has been initialized
                 // and the initialization transition has been completed.
                 // -> show "demo" map
 
                 // set title for first slide
-                $( this.options.container ).find(  this.options.titleElement).text('Browser view');
+                $(this.options.container).find(this.options.titleElement).text('Browser view');
 
                 $('#' + config.headHeaderMapId).drawDemoMap(function(){
 
@@ -331,12 +343,12 @@ define([
     let initGallery = (newElements) => {
         if( newElements.length > 0){
             // We have to add ALL thumbnail elements to the gallery!
-            // -> even those wthat are invisible (not lazyLoaded) now!
+            // -> even those which are invisible (not lazyLoaded) now!
             // -> This is required for "swipe" through all images
             let allThumbLinks = getThumbnailElements();
 
             requirejs(['blueImpGalleryBootstrap'], () => {
-                $(newElements).each(function() {
+                $(newElements).each(function(){
                     let borderless = false;
 
                     let galleryElement = $('#' + config.galleryId);
@@ -369,17 +381,17 @@ define([
      */
     let initYoutube = () => {
 
-        $('.youtube').each(function() {
+        $('.youtube').each(function(){
             // Based on the YouTube ID, we can easily find the thumbnail image
             $(this).css('background-image', 'url(//i.ytimg.com/vi/' + this.id + '/sddefault.jpg)');
 
             // Overlay the Play icon to make it look like a video player
             $(this).append($('<div/>', {'class': 'play'}));
 
-            $(document).delegate('#' + this.id, 'click', function() {
+            $(document).delegate('#' + this.id, 'click', function(){
                 // Create an iFrame with autoplay set to true
                 let iFrameUrl = '//www.youtube.com/embed/' + this.id + '?autoplay=1&autohide=1';
-                if ( $(this).data('params') ){
+                if( $(this).data('params') ){
                     iFrameUrl += '&'+$(this).data('params');
                 }
 
@@ -437,16 +449,7 @@ define([
         showVisibleElements();
 
         // event listener for navigation links
-        $('.page-scroll').on('click', function(){
-            // get element to scroll
-            let anchorTag = $(this).attr('data-anchor');
-
-            // scroll to container
-            $(anchorTag).velocity('scroll', {
-                duration: 300,
-                easing: 'swing'
-            });
-        });
+        Util.initPageScroll('#' + config.navigationElementId);
     };
 
     /**
@@ -476,7 +479,7 @@ define([
                     style: statusClass
                 };
 
-                requirejs(['text!templates/ui/server_panel.html', 'mustache'], function(template, Mustache) {
+                requirejs(['text!templates/ui/server_panel.html', 'mustache'], function(template, Mustache){
                     let content = Mustache.render(template, data);
                     $('#' + config.headerId).prepend(content);
                     $('#' + config.stickyPanelServerId).velocity('transition.slideLeftBigIn', {
@@ -579,7 +582,7 @@ define([
          * update all character panels -> set CSS class (e.g. after some panels were added/removed,..)
          */
         let updateCharacterPanels = function(){
-            let characterRows = $('.' + config.characterSelectionClass + ' .pf-dynamic-area').parent();
+            let characterRows = $('.' + config.characterSelectionClass + ' .' + Util.config.dynamicAreaClass).parent();
             let rowClassIdentifier = ((12 / characterRows.length ) <= 3) ? 3 : (12 / characterRows.length);
             $(characterRows).removeClass().addClass('col-sm-' + rowClassIdentifier);
         };
@@ -589,7 +592,7 @@ define([
         let removeCharacterPanel = function(panelElement){
             $(panelElement).velocity('transition.expandOut', {
                 duration: 250,
-                complete: function () {
+                complete: function(){
                     // lock row for CSS animations while removing...
                     $(this).parent().addClass(config.characterRowAnimateClass);
 
@@ -616,6 +619,7 @@ define([
                 case 'UNKNOWN':
                     label = 'ERROR';
                     break;
+                case 'CHARACTER':
                 case 'CORPORATION':
                 case 'ALLIANCE':
                     label = 'INVALID';
@@ -631,7 +635,7 @@ define([
         // request character data for each character panel
         requirejs(['text!templates/ui/character_panel.html', 'mustache'], function(template, Mustache){
 
-            $('.' + config.characterSelectionClass + ' .pf-dynamic-area').each(function(){
+            $('.' + config.characterSelectionClass + ' .' + Util.config.dynamicAreaClass).each(function(){
                 let characterElement = $(this);
 
                 characterElement.showLoadingAnimation();
@@ -682,18 +686,13 @@ define([
                         let content = Mustache.render(template, data);
                         this.characterElement.html(content);
 
-                        // lock character selection on click (prevent click spamming)
-                        this.characterElement.find('a').on('click', function(){
-                            $('.' + config.splashOverlayClass).showSplashOverlay();
-                        });
-
                         // show character panel (animation settings)
                         initCharacterAnimation(this.characterElement.find('.' + config.characterImageWrapperClass));
                     }else{
                         // character data not available -> remove panel
                         removeCharacterPanel(this.characterElement);
                     }
-                }).fail(function( jqXHR, status, error) {
+                }).fail(function(jqXHR, status, error){
                     let characterElement = this.characterElement;
                     characterElement.hideLoadingAnimation();
 
@@ -781,7 +780,7 @@ define([
             $.fn.showNotificationDialog(options);
 
             // change url (remove logout parameter)
-            if (history.pushState) {
+            if(history.pushState){
                 history.pushState({}, '', location.protocol + '//' + location.host + location.pathname);
             }
         }
@@ -815,7 +814,7 @@ define([
         // init carousel
         initCarousel();
 
-        // init scrollspy
+        // init scrollSpy
         // -> after "Carousel"! required for correct "viewport" calculation (Gallery)!
         initScrollSpy();
 

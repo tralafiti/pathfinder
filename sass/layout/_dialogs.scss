@@ -1,5 +1,4 @@
 .modal-content, .panel-body {
-
   // dialog headline ==========================================================
   h2 {
     font-family: $font-family-sans-serif;
@@ -41,6 +40,7 @@
         color: $orange;
         top: 10px;
         right: 6px;
+        will-change: transform, color;
 
         @extend .pf-animate-rotate;
         @extend .fa-fw;
@@ -57,7 +57,6 @@
     }
   }
 }
-
 
 .modal-content {
   // data tables ==============================================================
@@ -141,13 +140,11 @@
       }
 
     }
-
   }
 }
 
 // settings dialog ============================================================
 #pf-settings-dialog{
-
   // smaller buttons
   .form-group .btn-sm{
     padding: 4px 7px 3px;
@@ -177,8 +174,11 @@
 
 // shortcuts dialog ===========================================================
 #pf-shortcuts-dialog{
-  td kbd:last-of-type{
+  td kbd{
     & + i {
+      width: 16px;
+    }
+    &:last-of-type + i{
       display: none
     }
   }
@@ -193,7 +193,7 @@
 
 // ad system dialog ===========================================================
 .pf-system-dialog-select{
-  width: 270px !important;
+  width: 300px !important;
 }
 
 // task-manager dialog ========================================================
@@ -215,6 +215,20 @@
   }
 }
 
+// structure dialog ===========================================================
+#pf-structure-dialog{
+  #pf-structure-dialog-corporation-select, #pf-structure-dialog-type-select{
+    width: 267px !important;
+  }
+}
+
+// connection log dialog ======================================================
+#pf-connection-info-dialog{
+  #pf-connection-info-dialog-type-select, #pf-connection-info-dialog-character-select{
+    width: 310px !important;
+  }
+}
+
 // jump info dialog ===========================================================
 .pf-jump-info-dialog{
   blockquote{
@@ -222,6 +236,7 @@
     margin-bottom: 5px;
   }
 }
+
 // changelog
 .pf-changelog-dialog{
   .pf-dynamic-message-container{
@@ -229,9 +244,14 @@
   }
 }
 
+// system effect dialog =======================================================
+.pf-system-effect-dialog{
+  .dataTable{
+    border-collapse: collapse; // required vor column highlight (hover) -> prevents jumping when border gets attached
+  }
+}
 // credits dialog =============================================================
 .pf-credits-dialog{
-
   .pf-credits-logo-background{
     overflow: visible;
     background: url("#{$base-url}/logo_bg.png");

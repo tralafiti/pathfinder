@@ -9,6 +9,7 @@ define([
     'app/logging',
     'mustache',
     'app/map/util',
+    'app/map/contextmenu',
     'text!img/logo.svg!strip',
     'text!templates/modules/header.html',
     'text!templates/modules/footer.html',
@@ -26,7 +27,7 @@ define([
     'xEditable',
     'slidebars',
     'app/module_map'
-], ($, Init, Util, Logging, Mustache, MapUtil, TplLogo, TplHead, TplFooter) => {
+], ($, Init, Util, Logging, Mustache, MapUtil, MapContextMenu, TplLogo, TplHead, TplFooter) => {
 
     'use strict';
 
@@ -57,19 +58,18 @@ define([
         headProgramStatusClass: 'pf-head-program-status',                       // class for "program status" notification
 
         // footer
-        pageFooterId: 'pf-footer',                                              // id for page footer
         footerLicenceLinkClass: 'pf-footer-licence',                            // class for "licence" link
-        globalInfoPanelId: 'pf-global-info',                                    // id for "global info panel"
 
         // menu
         menuHeadMenuLogoClass: 'pf-head-menu-logo',                             // class for main menu logo
         menuClockClass: 'pf-menu-clock',                                        // class for EVE-Time clock
 
         // helper element
-        dynamicElementWrapperId: 'pf-dialog-wrapper',
+        dynamicElementWrapperId: 'pf-dialog-wrapper',                           // class for container element that holds hidden "context menus"
 
         // system signature module
-        systemSigModuleClass: 'pf-sig-table-module',                            // module wrapper (signatures)
+        systemSignatureModuleClass: 'pf-system-signature-module',               // module wrapper (signatures)
+        systemIntelModuleClass: 'pf-system-intel-module',                       // module wrapper (intel)
     };
 
     let programStatusCounter = 0;                                               // current count down in s until next status change is possible
@@ -104,8 +104,7 @@ define([
                     id: config.pageId,
                     class: config.pageClass
                 }).append(
-                    Util.getMapModule()
-                ).append(
+                    Util.getMapModule(),
                     $('<div>', {
                         id: config.dynamicElementWrapperId
                     })
@@ -137,13 +136,27 @@ define([
                 location.reload();
             });
 
-            body.watchKey('signaturePaste', (e) => {
+            body.watchKey('newSignature', (body) => {
+                let activeMap = Util.getMapModule().getActiveMap();
+                if(activeMap){
+                    let mapContentElement = MapUtil.getTabContentElementByMapElement(activeMap);
+                    let signatureModuleElement = mapContentElement.find('.' + config.systemSignatureModuleClass);
+                    signatureModuleElement.trigger('pf:showSystemSignatureModuleAddNew');
+                }
+            });
+
+            body.watchKey('clipboardPaste', (e) => {
                 // just send event to the current active map
                 let activeMap = Util.getMapModule().getActiveMap();
                 if(activeMap){
                     // look for active signature module (active system)
-                    let signatureModuleElement = MapUtil.getTabContentElementByMapElement(activeMap).find('.' + config.systemSigModuleClass);
-                    if(signatureModuleElement.length){
+                    let mapContentElement = MapUtil.getTabContentElementByMapElement(activeMap);
+                    let signatureModuleElement = mapContentElement.find('.' + config.systemSignatureModuleClass);
+                    let intelModuleElement = mapContentElement.find('.' + config.systemIntelModuleClass);
+                    if(
+                        signatureModuleElement.length ||
+                        intelModuleElement.length
+                    ){
                         e = e.originalEvent;
                         let targetElement = $(e.target);
                         // do not read clipboard if pasting into form elements
@@ -155,6 +168,7 @@ define([
                         ){
                             let clipboard = (e.originalEvent || e).clipboardData.getData('text/plain');
                             signatureModuleElement.trigger('pf:updateSystemSignatureModuleByClipboard', [clipboard]);
+                            intelModuleElement.trigger('pf:updateIntelModuleByClipboard', [clipboard]);
                         }
                     }
                 }
@@ -245,12 +259,11 @@ define([
                     id: Util.config.menuButtonFullScreenId
                 }).html('&nbsp;&nbsp;Full screen').prepend(
                     $('<i>',{
-                        class: 'glyphicon glyphicon-fullscreen',
-                        css: {width: '1.23em'}
+                        class: 'fas fa-expand-arrows-alt fa-fw'
                     })
                 ).on('click', function(){
                     let fullScreenElement = $('body');
-                    requirejs(['jquery', 'fullScreen'], function($) {
+                    requirejs(['jquery', 'fullScreen'], function($){
 
                         if($.fullscreen.isFullScreen()){
                             $.fullscreen.exit();
@@ -298,7 +311,7 @@ define([
             )
         );
 
-        requirejs(['fullScreen'], function() {
+        requirejs(['fullScreen'], function(){
             if($.fullscreen.isNativelySupported() === true){
                 $('#' + Util.config.menuButtonFullScreenId).removeClass('hide');
             }
@@ -338,9 +351,9 @@ define([
                 $('<a>', {
                     class: 'list-group-item',
                     id: Util.config.menuButtonGridId
-                }).html('&nbsp;&nbsp;&nbsp;Grid snapping').prepend(
+                }).html('&nbsp;&nbsp;Grid snapping').prepend(
                     $('<i>',{
-                        class: 'glyphicon glyphicon-th'
+                        class: 'fas fa-th fa-fw'
                     })
                 ).on('click', function(){
                     Util.getMapModule().getActiveMap().triggerMenuEvent('MapOption', {
@@ -352,7 +365,7 @@ define([
                 $('<a>', {
                     class: 'list-group-item',
                     id: Util.config.menuButtonMagnetizerId
-                }).html('&nbsp;&nbsp;&nbsp;Magnetizing').prepend(
+                }).html('&nbsp;&nbsp;Magnetizing').prepend(
                     $('<i>',{
                         class: 'fas fa-magnet fa-fw'
                     })
@@ -366,7 +379,7 @@ define([
                 $('<a>', {
                     class: 'list-group-item',
                     id: Util.config.menuButtonEndpointId
-                }).html('&nbsp;&nbsp;&nbsp;Signatures').prepend(
+                }).html('&nbsp;&nbsp;Signatures').prepend(
                     $('<i>',{
                         class: 'fas fa-link fa-fw'
                     })
@@ -377,13 +390,32 @@ define([
                     });
                 })
             ).append(
+                $('<a>', {
+                    class: 'list-group-item',
+                    id: Util.config.menuButtonCompactId
+                }).html('&nbsp;&nbsp;Compact').prepend(
+                    $('<i>',{
+                        class: 'fas fa-compress fa-fw'
+                    })
+                ).append(
+                    $('<span>',{
+                        class: 'badge bg-color bg-color-gray txt-color txt-color-warning',
+                        text: 'beta'
+                    })
+                ).on('click', function(){
+                    Util.getMapModule().getActiveMap().triggerMenuEvent('MapOption', {
+                        option: 'mapCompact',
+                        toggle: true
+                    });
+                })
+            ).append(
                 getMenuHeadline('Help')
             ).append(
                 $('<a>', {
                     class: 'list-group-item list-group-item-info'
                 }).html('&nbsp;&nbsp;Manual').prepend(
                     $('<i>',{
-                        class: 'fas fa-book fa-fw'
+                        class: 'fas fa-book-reader fa-fw'
                     })
                 ).on('click', function(){
                     $(document).triggerMenuEvent('Manual');
@@ -430,11 +462,7 @@ define([
      * @param event
      * @param data
      */
-    $.fn.triggerMenuEvent = function(event, data){
-        if(data === undefined){
-            data = {};
-        }
-
+    $.fn.triggerMenuEvent = function(event, data = {}){
         $(this).trigger('pf:menu' + event, [data]);
     };
 
@@ -471,12 +499,12 @@ define([
         });
 
         // main menus
-        $('.' + config.headMenuClass).on('click', function(e) {
+        $('.' + config.headMenuClass).on('click', function(e){
             e.preventDefault();
             slideMenu.slidebars.toggle('left');
         });
 
-        $('.' + config.headMapClass).on('click', function(e) {
+        $('.' + config.headMapClass).on('click', function(e){
             e.preventDefault();
             slideMenu.slidebars.toggle('right');
         });
@@ -518,7 +546,7 @@ define([
         // -> always "enable"
         mapTrackingCheckbox.bootstrapToggle('on');
 
-        mapTrackingCheckbox.on('change', function(e) {
+        mapTrackingCheckbox.on('change', function(e){
             let value = $(this).is(':checked');
             let tracking = 'off';
             let trackingText = 'Your current location will not actually be added';
@@ -531,7 +559,6 @@ define([
 
             Util.showNotify({title: 'Map tracking: ' + tracking, text: trackingText, type: trackingType}, false);
         });
-
 
         // init all tooltips
         let tooltipElements = $('#' + config.pageHeaderId).find('[title]');
@@ -553,7 +580,7 @@ define([
         let pageElement = $(this);
 
         let moduleData = {
-            id: config.pageFooterId,
+            id: Util.config.footerId,
             footerLicenceLinkClass: config.footerLicenceLinkClass,
             currentYear: new Date().getFullYear()
         };
@@ -703,12 +730,26 @@ define([
 
         // END menu events =============================================================================
 
-        // global "modal" callback (for all modals)
-        $('body').on('hide.bs.modal', '> .modal', function(a,b) {
-            $(this).destroyTimestampCounter();
+        // global "popover" callback (for all popovers)
+        $('.' + Util.config.popoverTriggerClass).on('hide.bs.popover', function(e){
+            let popoverElement = $(this).data('bs.popover').tip();
+
+            // destroy all active tooltips inside this popover
+            popoverElement.destroyTooltip(true);
         });
 
-        // disable memue links based on current map config
+        // global "modal" callback (for all modals)
+        $('body').on('hide.bs.modal', '> .modal', function(e){
+            let modalElement = $(this);
+            modalElement.destroyTimestampCounter(true);
+
+            // destroy all Select2
+            modalElement.find('.' + Util.config.select2Class)
+                .filter((i, element) => $(element).data('select2'))
+                .select2('destroy');
+        });
+
+        // disable menu links based on current map config
         documentElement.on('pf:updateMenuOptions', function(e, data){
             let hasRightMapDelete = MapUtil.checkRight('map_delete', data.mapConfig);
             $('#' + Util.config.menuButtonMapDeleteId).toggleClass('disabled', !hasRightMapDelete);
@@ -746,12 +787,14 @@ define([
                         label: '<i class="fas fa-fw fa-sync"></i> restart',
                         className: ['btn-primary'].join(' '),
                         callback: function(){
-                            // check if error was 5xx -> reload page
-                            // -> else try to logout -> ajax request
-                            if(data.status >= 500 && data.status < 600){
-                                // redirect to login
-                                window.location = '../';
+                            if(data.redirect) {
+                                //  ... redirect user to e.g. login form page ...
+                                Util.redirect(data.redirect, ['logout']);
+                            }else if(data.reload){
+                                // ... or reload current page ...
+                                location.reload();
                             }else{
+                                // ... fallback try to logout user
                                 documentElement.trigger('pf:menuLogout');
                             }
                         }
@@ -770,12 +813,9 @@ define([
             };
 
             // add error information (if available)
-            if(
-                data.error &&
-                data.error.length
-            ){
-                for(let i = 0; i < data.error.length; i++){
-                    options.content.textSmaller.push(data.error[i].message);
+            if(data.error && data.error.length){
+                for(let error of data.error){
+                    options.content.textSmaller.push(error.message);
                 }
             }
 
@@ -925,7 +965,7 @@ define([
             animateHeaderElement(userInfoElement, (userInfoElement) => {
                 if(currentCharacterChanged){
                     userInfoElement.find('span').text( newCharacterName );
-                    userInfoElement.find('img').attr('src', Init.url.ccpImageServer + '/Character/' + newCharacterId + '_32.jpg' );
+                    userInfoElement.find('img').attr('src', Init.url.ccpImageServer + '/Character/' + newCharacterId + '_32.jpg');
                 }
                 // init "character switch" popover
                 userInfoElement.initCharacterSwitchPopover(userData);
@@ -946,7 +986,7 @@ define([
             // toggle element
             animateHeaderElement(userShipElement, (userShipElement) => {
                 userShipElement.find('span').text( newShipData.typeName );
-                userShipElement.find('img').attr('src', Init.url.ccpImageServer + '/Render/' + newShipData.typeId + '_32.png' );
+                userShipElement.find('img').attr('src', Init.url.ccpImageServer + '/Render/' + newShipData.typeId + '_32.png');
                 // trigger ship change event
                 $(document).trigger('pf:activeShip', {
                     shipData: newShipData
@@ -1052,7 +1092,7 @@ define([
     /**
      * shows a test notification for desktop messages
      */
-    let notificationTest = function(){
+    let notificationTest = () => {
         Util.showNotify({
                 title: 'Test Notification',
                 text: 'Accept browser security question'},
@@ -1067,7 +1107,7 @@ define([
      *  set event listener if the program tab is active or not
      *  this is used to lower the update ping cycle to reduce server load
      */
-    let initTabChangeObserver = function(){
+    let initTabChangeObserver = () => {
 
         // increase the timer if a user is inactive
         let increaseTimer = 5000;
@@ -1078,30 +1118,30 @@ define([
 
         // Set the name of the hidden property and the change event for visibility
         let hidden, visibilityChange;
-        if (typeof document.hidden !== 'undefined') { // Opera 12.10 and Firefox 18 and later support
+        if(typeof document.hidden !== 'undefined'){ // Opera 12.10 and Firefox 18 and later support
             hidden = 'hidden';
             visibilityChange = 'visibilitychange';
-        } else if (typeof document.mozHidden !== 'undefined') {
+        }else if(typeof document.mozHidden !== 'undefined'){
             hidden = 'mozHidden';
             visibilityChange = 'mozvisibilitychange';
-        } else if (typeof document.msHidden !== 'undefined') {
+        }else if(typeof document.msHidden !== 'undefined'){
             hidden = 'msHidden';
             visibilityChange = 'msvisibilitychange';
-        } else if (typeof document.webkitHidden !== 'undefined') {
+        }else if(typeof document.webkitHidden !== 'undefined'){
             hidden = 'webkitHidden';
             visibilityChange = 'webkitvisibilitychange';
         }
 
         // function is called if the tab becomes active/inactive
-        function handleVisibilityChange() {
-            if (document[hidden]) {
+        let handleVisibilityChange = () => {
+            if(document[hidden]){
                 // tab is invisible
                 // globally store current visibility status
                 window.isVisible = false;
 
                 Util.getCurrentTriggerDelay( mapUpdateKey, increaseTimer );
                 Util.getCurrentTriggerDelay( mapUserUpdateKey, increaseTimer );
-            } else {
+            }else{
                 // tab is visible
                 // globally store current visibility status
                 window.isVisible = true;
@@ -1112,9 +1152,9 @@ define([
                 // stop blinking tab from previous notifications
                 Util.stopTabBlink();
             }
-        }
+        };
 
-        if (
+        if(
             typeof document.addEventListener !== 'undefined' &&
             typeof document[hidden] !== 'undefined'
         ){
@@ -1127,6 +1167,17 @@ define([
             document.addEventListener(visibilityChange, handleVisibilityChange, false);
         }
 
+    };
+
+    /**
+     * add "hidden" context menu elements to page
+     */
+    let initMapContextMenus = () => {
+        $('#' + config.dynamicElementWrapperId).append(
+            MapContextMenu.initMapContextMenu(),
+            MapContextMenu.initConnectionContextMenu(),
+            MapContextMenu.initSystemContextMenu(Init.systemStatus)
+        );
     };
 
     /**
@@ -1210,25 +1261,6 @@ define([
     };
 
     /**
-     * show information panel to active users (on bottom)
-     * @returns {*|jQuery|HTMLElement}
-     */
-    $.fn.showGlobalInfoPanel = function (){
-        let body = $(this);
-        let infoTemplate = 'text!templates/ui/info_panel.html';
-
-        requirejs([infoTemplate, 'mustache'], function(template, Mustache) {
-            let data = {
-                id: config.globalInfoPanelId
-            };
-            let content = $( Mustache.render(template, data) );
-            content.insertBefore( '#' + config.pageFooterId );
-        });
-
-        return body;
-    };
-
-    /**
      * get all form Values as object
      * this includes all xEditable fields
      * @returns {{}}
@@ -1241,7 +1273,7 @@ define([
         // add "unchecked" checkboxes as well
         values = values.concat(
             form.find('input[type=checkbox]:not(:checked)').map(
-                function() {
+                function(){
                     return {name: this.name, value: 0};
                 }).get()
         );
@@ -1273,8 +1305,8 @@ define([
     };
 
     return {
-        initTabChangeObserver: initTabChangeObserver
+        initTabChangeObserver: initTabChangeObserver,
+        initMapContextMenus: initMapContextMenus
     };
-
 
 });

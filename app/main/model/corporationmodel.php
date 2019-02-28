@@ -103,6 +103,16 @@ class CorporationModel extends BasicModel {
             'nullable' => false,
             'default' => ''
         ],
+        'ticker' => [
+            'type' => Schema::DT_VARCHAR128,
+            'nullable' => false,
+            'default' => ''
+        ],
+        'memberCount' => [
+            'type' => Schema::DT_INT,
+            'nullable' => false,
+            'default' => 0
+        ],
         'shared' => [
             'type' => Schema::DT_BOOL,
             'nullable' => false,
@@ -121,6 +131,12 @@ class CorporationModel extends BasicModel {
         ],
         'corporationRights' => [
             'has-many' => ['Model\CorporationRightModel', 'corporationId']
+        ],
+        'corporationStructures' => [
+            'has-many' => ['Model\CorporationStructureModel', 'corporationId']
+        ],
+        'structures' => [
+            'has-many' => ['Model\StructureModel', 'corporationId']
         ]
     ];
 
@@ -146,11 +162,25 @@ class CorporationModel extends BasicModel {
     }
 
     /**
+     * Event "Hook" function
+     * return false will stop any further action
+     * @param self $self
+     * @param $pkeys
+     * @return bool
+     */
+    public function beforeUpdateEvent($self, $pkeys){
+        // if model changed, 'update' col needs to be updated as well
+        // -> data no longer "outdated"
+        $this->touch('updated');
+
+        return parent::beforeUpdateEvent($self, $pkeys);
+    }
+
+    /**
      * get all maps for this corporation
      * @param array $mapIds
      * @param array $options
      * @return array
-     * @throws \Exception\PathfinderException
      */
     public function getMaps($mapIds = [], $options = []){
         $maps = [];
@@ -211,6 +241,38 @@ class CorporationModel extends BasicModel {
     }
 
     /**
+     * get all structure data for this corporation
+     * @param array $systemIds
+     * @return array
+     */
+    public function getStructuresData(array $systemIds = []) : array {
+        $structuresData = [];
+
+        $this->filter('corporationStructures', ['active = ?', 1]);
+        $this->has('corporationStructures.structureId', ['active = ?', 1]);
+
+        if($systemIds){
+            if(count($systemIds) == 1){
+                $filterSystems = 'systemId = ?';
+                $filterSystemIds = reset($systemIds);
+            }else{
+                $filterSystems = 'systemId IN (?)';
+                $filterSystemIds = $systemIds;
+            }
+
+            $this->has('corporationStructures.structureId', [$filterSystems, $filterSystemIds]);
+        }
+
+        if($this->corporationStructures) {
+            foreach($this->corporationStructures as $corporationStructure){
+                $structuresData[] = $corporationStructure->structureId->getData();
+            }
+        }
+
+        return $structuresData;
+    }
+
+    /**
      * get roles for each character in this corp
      * -> CCP API call
      * @param string $accessToken
@@ -222,7 +284,10 @@ class CorporationModel extends BasicModel {
             !empty($accessToken) &&
             !$this->isNPC
         ){
-            $characterRolesData = self::getF3()->ccpClient->getCorporationRoles($this->_id, $accessToken);
+            $response = self::getF3()->ccpClient->getCorporationRoles($this->_id, $accessToken);
+            if( !empty($response['roles']) ){
+                $characterRolesData = (array)$response['roles'];
+            }
         }
 
         return $characterRolesData;
@@ -270,6 +335,46 @@ class CorporationModel extends BasicModel {
         }
 
         return $corporationRights;
+    }
+
+    /**
+     * load corporation by Id either from DB or load data from API
+     * @param int $id
+     * @param int $ttl
+     * @param bool $isActive
+     * @return \DB\Cortex
+     */
+    public function getById(int $id, int $ttl = self::DEFAULT_SQL_TTL, bool $isActive = true){
+        /**
+         * @var CorporationModel $corporation
+         */
+        $corporation = parent::getById($id, $ttl, $isActive);
+        if($corporation->isOutdated()){
+            // request corporation data
+            $corporationData = self::getF3()->ccpClient->getCorporationData($id);
+            if( !empty($corporationData) ){
+                // check for NPC corporation
+                $corporationData['isNPC'] = self::getF3()->ccpClient->isNpcCorporation($id);
+
+                $corporation->copyfrom($corporationData, ['id', 'name', 'ticker', 'memberCount', 'isNPC']);
+                $corporation->save();
+            }
+        }
+
+        return $corporation;
+    }
+
+    /**
+     * add new structure for this corporation
+     * @param StructureModel $structure
+     */
+    public function saveStructure(StructureModel $structure){
+        if( !$structure->dry() ){
+            $corporationStructure = $this->rel('corporationStructures');
+            $corporationStructure->corporationId = $this;
+            $corporationStructure->structureId = $structure;
+            $corporationStructure->save();
+        }
     }
 
     /**

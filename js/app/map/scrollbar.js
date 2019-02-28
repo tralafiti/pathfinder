@@ -4,8 +4,10 @@
 define([
     'jquery',
     'app/init',
-    'app/util'
-], function($, Init, Util) {
+    'app/util',
+    'mousewheel',
+    'customScrollbar'
+], ($, Init, Util) => {
     'use strict';
 
     /**

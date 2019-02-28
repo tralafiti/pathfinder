@@ -31,9 +31,7 @@ a, .pf-link{
   }
 }
 
-// emphasized text
 em{
-
   font-style: italic;
 
   &.pf-brand{
@@ -47,6 +45,10 @@ em{
 
 .pf-font-line-through{
   text-decoration: line-through;
+}
+
+.no-scroll{
+  overflow: hidden;
 }
 
 .no-padding{
@@ -133,10 +135,15 @@ em{
 
 .pf-module-icon-button{
   cursor: pointer;
+  color: $gray-light; // overwrite xEditable button style
   @include transition(color 0.15s ease-out);
 
   &:hover, &.active{
     color: $orange !important;
+  }
+
+  &.editable{
+    border-bottom: none !important; // overwrite xEditable button style
   }
 }
 
@@ -162,6 +169,11 @@ a{
 
 // form fields custom styles ======================================================================
 .editable-input{
+
+  .pf-editable-name{
+    text-transform: uppercase;
+  }
+
   optgroup[label]{
     background-color: $gray;
     color: $gray-light;
@@ -170,6 +182,27 @@ a{
       background-color: $gray-dark;
       color: $gray-lighter;
       font-family: $font-family-monospace;
+    }
+  }
+
+  .editable-checklist{
+    & > div > label {
+      @extend .checkbox;
+      display: block !important;
+      padding-left: 20px !important; // overwrite inline-form styles
+      color: $gray-lighter;
+
+      & > span {
+        @extend label;
+
+        &:after{
+          top: -2px;
+        }
+      }
+    }
+
+    .pf-editable-unknown[value='0'] + span {
+      color: $red;
     }
   }
 }
@@ -184,8 +217,21 @@ select:active, select:hover {
 
 // select2 custom template ========================================================================
 .select2-results{
+  // <optgroup> options
+  .select2-results__options--nested{
+    .select2-results__option{
+      padding-left: 15px;  // more padding for nested options
+    }
+  }
+
   [class*="col-"]{
-    line-height: 22px;
+    // smaller and less padding
+    padding-left: 3px;
+    padding-right: 3px;
+  }
+
+  .clearfix.pf-result-image [class*="col-"]{
+    line-height: 22px;  // options with images need more height
   }
 }
 
@@ -206,10 +252,81 @@ select:active, select:hover {
 }
 
 // global dataTable styles ========================================================================
+.dataTables_wrapper{
+
+  .dataTables_length select{
+    margin: 0 3px;  // <select> for page size
+    padding: 1px;
+  }
+
+  .dt-buttons{
+    .dt-button{
+      line-height: 22px;
+      padding: 0 5px; // overwrite default
+
+      &:not(:last-child){
+        margin-right: 10px;
+      }
+
+      .fa{
+        margin-right: 5px;
+      }
+    }
+  }
+}
+
+// condensed dataTable toolbar
+.pf-dataTable-condensed-toolbar{
+  padding-top: 3px;
+
+  .dataTables_info{
+    padding-top: 0;
+    text-align: left;
+  }
+
+  & > div{
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+
+  .dataTables_paginate{
+    padding-top: 0;
+    margin-top: 0;
+
+    .paginate_button{
+      padding: 0;
+      height: 13px;
+      border: 0 !important;
+
+      &:before, &:after{
+        top: 0;
+      }
+      &:hover{
+        background: transparent !important;
+        color: $orange !important;
+      }
+    }
+  }
+
+  .dt-buttons{
+    text-align: right;
+    margin-bottom: 0;
+
+    .dt-button{
+      line-height: 18px;
+
+      .fa{
+        margin-right: 0;
+      }
+    }
+  }
+}
+
 .dataTable{
   th{
     &.pf-table-image-cell,
-    &.pf-table-image-small-cell{
+    &.pf-table-image-small-cell,
+    &.pf-table-image-smaller-cell{
       // no padding for image content
       padding-left: 0 !important;
       padding-right: 0 !important;
@@ -223,8 +340,37 @@ select:active, select:hover {
     }
   }
 
+  tr {
+    &.group{
+      background-color: rgba($gray-darker, 0.4);
+    }
+  }
+
   // "special" column styles
   td{
+
+    &.editable-disabled:focus{
+      // disabled xEditable td´s should not get focus style
+      // -> "pointer-events = none" would be nicer but does not work because "mousedown" should work -> select row function
+      outline: none;
+      background-color: transparent;
+    }
+
+    &.editable-click:not(.editable-disabled){
+      cursor: pointer;
+    }
+
+    &:focus, &.editable-open{
+      // set td as :focus even is td content is focused
+      outline: 1px solid $orange-dark;
+      outline-offset: -1px;
+      background-color: rgba($orange-dark, .08);
+    }
+
+    > .fa-circle{
+      font-size: 9px !important; // should not be "so big" (10px default)
+    }
+
     &.pf-table-link-cell{
       cursor: pointer;
       @extend .txt-color;
@@ -254,7 +400,6 @@ select:active, select:hover {
     }
 
     &.pf-table-image-cell{
-      // no padding for image content
       padding: 0 !important;
       image-rendering: -webkit-optimize-contrast;
 
@@ -269,6 +414,16 @@ select:active, select:hover {
     &.pf-table-image-small-cell{
       img{
         width: 24px; // smaller image (default 32)
+        // overwrite "default" border for image cells
+        border-left: 1px solid transparent;
+        border-right: 1px solid transparent;
+      }
+    }
+
+    &.pf-table-image-smaller-cell{
+      padding: 0 !important;
+      img{
+        width: 25px; // smaller image (default 32)
         // overwrite "default" border for image cells
         border-left: 1px solid transparent;
         border-right: 1px solid transparent;
@@ -331,6 +486,29 @@ select:active, select:hover {
     }
   }
 
+  // column highlight cell class
+  thead{
+    th.colHighlight{
+      border-bottom: 1px solid $orange-dark;
+    }
+  }
+
+  tbody{
+    td.colHighlight{
+      border-left: 1px solid $orange-dark;
+      border-right: 1px solid $orange-dark;
+      background-color: rgba($orange-dark, .08);
+    }
+
+    tr:first-child td.colHighlight{
+      border-top: 1px solid $orange-dark;
+    }
+
+    tr:last-child td.colHighlight{
+      border-bottom: 1px solid $orange-dark;
+    }
+  }
+
 }
 
 // table styles ===================================================================================
@@ -354,6 +532,10 @@ table{
   }
 
   td, th{
+    &.pf-table-cell-10{
+      width: 10px;
+    }
+
     &.pf-table-cell-20{
       width: 20px;
     }
@@ -377,11 +559,11 @@ table{
 }
 
 .pf-table-tools-action{
-  will-change: height, opacity, display;
+  will-change: height, opacity;
   opacity: 0; // triggered by js
   display: none; // triggered by js
   height: 0;
-  visibility: hidden;
+  overflow: hidden;
 }
 
 // landing indicator overlay ======================================================================
@@ -600,7 +782,7 @@ table{
       top: 0;
       left: 0;
       border-style: solid;
-      border-width: 0 0 8px 8px;
+      border-width: 0 0 9px 9px;
       border-color: transparent transparent transparent $gray;
       cursor: ns-resize;
     }
@@ -653,6 +835,28 @@ table{
     }
   }
 
+  // "Fake" spacer module -> preserves height during hide -> show animation for a module
+  .pf-module-spacer{
+    margin-bottom: 10px;  // same as .pf-module -> no UI jump
+  }
+
+  .pf-module-control-area{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 10px;
+    min-height: inherit;
+
+    &:hover{
+      .fa-sync{
+        @include transform(rotateZ(720deg));
+      }
+    }
+
+    .fa-sync{
+      @include transition(transform 1.6s ease-out);
+    }
+  }
 }
 
 // User status ====================================================================================
@@ -710,26 +914,30 @@ table{
 }
 
 // system info status =============================================================================
-.pf-system-info-rally{
-  .pf-system-head{
-    background-color: $pink-darker;
+.pf-rally{
+  text-shadow: 1px 1px 2px $gray-darkest; // improve text contrast
+  background-color: $pink-darker;
 
-    @include background-image(linear-gradient(-45deg,
-      $purple-dark 25%,
-      transparent 25%,
-      transparent 50%,
-      $purple-dark 50%,
-      $purple-dark 75%,
-      transparent 75%,
-      transparent));
-    background-size:25px 25px;
-    -webkit-animation:move 3s linear infinite;
-    -moz-animation:move 3s linear infinite;
-    -ms-animation:move 3s linear infinite;
-    animation:move 3s linear infinite;
-  }
+  @include background-image(linear-gradient(-45deg,
+          $purple-dark 25%,
+          transparent 25%,
+          transparent 50%,
+          $purple-dark 50%,
+          $purple-dark 75%,
+          transparent 75%,
+          transparent));
+  background-size: 25px 25px;
+  -webkit-animation: move 2.5s linear infinite;
+  -moz-animation: move 2.5s linear infinite;
+  -ms-animation: move 2.5s linear infinite;
+  animation: move 2.5s linear infinite;
 }
 
+.pf-system-info-rally{
+  .pf-system-head{
+    @extend .pf-rally;
+  }
+}
 
 // system security status =========================================================================
 
@@ -814,6 +1022,10 @@ table{
   color: $indigo;
 }
 
+.pf-system-sec-abyssal{
+  color: $pink;
+}
+
 // system status ==================================================================================
 
 .pf-system-status-friendly{
@@ -869,15 +1081,57 @@ table{
   }
 }
 
-// system effect info dialog ======================================================================
-.pf-system-effect-dialog-wrapper, .pf-jump-info-dialog{
-  .table{
-    margin: 15px 0;
+// Filter =========================================================================================
+.pf-system-hidden{
+  opacity: 0.15 !important;
+  pointer-events: none;
+}
 
-    td{
-      text-transform: capitalize;
+// system effect info dialog ======================================================================
+.pf-system-effect-dialog{
+  .clearfix + .col-md-6{
+    margin-top: 10px;
+    + .col-md-6{
+      margin-top: 10px;
     }
   }
+}
+
+// planet types ===================================================================================
+.pf-planet-barren{
+  color: $planet-color-barren;
+}
+
+.pf-planet-gas{
+  color: $planet-color-gas;
+}
+
+.pf-planet-ice{
+  color: $planet-color-ice;
+}
+
+.pf-planet-lava{
+  color: $planet-color-lava;
+}
+
+.pf-planet-oceanic{
+  color: $planet-color-oceanic;
+}
+
+.pf-planet-plasma{
+  color: $planet-color-plasma;
+}
+
+.pf-planet-shattered{
+  color: $planet-color-shattered;
+}
+
+.pf-planet-storm{
+  color: $planet-color-storm;
+}
+
+.pf-planet-temperate{
+  color: $planet-color-temperate;
 }
 
 // "fake connection" classes for the map manual
@@ -907,6 +1161,18 @@ table{
         $teal-lightest 10px,
         $gray 10px,
         $gray 20px
+    );
+  }
+
+  &.pf-map-connection-abyssal{
+    background-color: darken($pink-darker, 8%);
+    border-color: $gray;
+    background: repeating-linear-gradient(
+                    to right,
+                    darken($pink-darker, 8%),
+                    darken($pink-darker, 8%) 5px,
+                    $gray 5px,
+                    $gray 10px
     );
   }
 
@@ -953,9 +1219,49 @@ table{
       @include border-radius(3px);
     }
   }
-
 }
 
+// "fake connection" classes for inline text
+.pf-fake-connection-text{
+  padding: 0 2px;
+  border-style: solid;
+  border-color: darken($gray-light, 5%);
+  border-width: 2px;
+  border-left: none;
+  border-right: none;
+
+  &.pf-wh-eol{
+    border-color: $pink-dark;
+  }
+
+  &.pf-wh-reduced{
+    background-color: $orange;
+    color: $black;
+  }
+
+  &.pf-wh-critical{
+    background-color: $red-darker;
+    color: $black;
+  }
+
+  &.pf-wh-frig{
+    border-top-style: dashed;
+    border-bottom-style: dashed;
+  }
+}
+
+// structure status ===============================================================================
+.pf-structure-status-unknown{
+  color: $teal-lighter;
+}
+
+.pf-structure-status-online{
+  color: $green;
+}
+
+.pf-structure-status-offline{
+  color: $red-darker;
+}
 
 // global tooltip settings ========================================================================
 .tooltip-inner{
@@ -995,84 +1301,6 @@ table{
 
 .tooltip.left .tooltip-arrow{
   border-left-color: $gray-light;
-}
-
-// global popover settings ========================================================================
-.popover{
-  // on top of modals even if they are attached to <body>
-  z-index: $zindex-modal + 10;
-  // give large popups more space..
-  max-width: 600px;
-
-  // image in popover
-  img{
-    @include border-radius(5px);
-  }
-
-  h4{
-    color: $gray-lighter;
-  }
-
-  // table in pop popover
-  table{
-    color: $gray-lighter;
-    font-family: $font-family-bold;
-    line-height: 16px;
-    font-size: 11px;
-
-    td{
-      padding: 0 5px;
-      vertical-align: middle !important;
-    }
-  }
-}
-
-// specific "Pathfinder" Popover settings ---------------------------------------------------------
-.pf-popover{
-  display: initial;
-
-  .popover-content{
-    padding: 0; // overwrite default popover padding
-  }
-
-  h6{
-    white-space: nowrap;
-    margin-right: 50px;
-    @include clearfix();
-  }
-
-  .well{
-    margin-top: 7px;
-    margin-bottom: 10px;
-  }
-
-  .list-group{
-    margin: 0;
-
-    .list-group-item{
-      color: $gray-dark;
-
-      &:hover{
-        color: $gray-darkest;
-      }
-
-      &.disabled{
-        background-color: $gray;
-        color: $gray-light;
-        cursor: not-allowed;
-      }
-
-      img{
-        width: 30px;
-        margin: -8px 10px -6px -8px;
-        border-radius: 0; // overwrite "global"
-      }
-
-      i{
-        margin-right: 20px;
-      }
-    }
-  }
 }
 
 // elements that are popover "triggers" (root elements) (e.g. open on right click)-----------------
@@ -1277,6 +1505,10 @@ code {
   .badge{
     background-color: $gray;
     color: $gray-lighter;
+
+    &:empty{
+      display: none;
+    }
   }
 
   small{
@@ -1284,26 +1516,16 @@ code {
   }
 }
 
-// character switch popover
-#pf-head-character-switch{
-  td{
-    border: none;
-
-    &:first-child + td{
-      // 2nd column
-      padding: 0 5px;
-    }
-  }
-}
-
 // footer (map) ===================================================================================
 #pf-footer{
+  display: flex;
   position: absolute;
   bottom: 0;
   left: 0;
   width: 100%;
   margin: 0;
   background: rgba($gray, 0.3);
+  padding: 1px 0;
 
   a{
     font-family: $font-family-bold;
@@ -1313,6 +1535,24 @@ code {
       color: $teal;
       text-decoration: none;
     }
+  }
+
+  .pf-footer-left{
+    display: flex;
+    flex: none;          // shorthand for: flex-grow: 0, flex-shrink: 0, flex-basis: auto
+    justify-content: flex-start;
+  }
+
+  .pf-footer-center{
+    display: flex;
+    flex: 1;          // shorthand for: flex-grow: 1, flex-shrink: 1, flex-basis: 0
+    padding: 0 20px;
+  }
+
+  .pf-footer-right{
+    display: flex;
+    flex: none;          // shorthand for: flex-grow: 0, flex-shrink: 0, flex-basis: auto
+    justify-content: flex-end;
   }
 }
 
@@ -1337,12 +1577,14 @@ code {
 
 // global info panel ==============================================================================
 #pf-global-info{
-  position: absolute;
-  left: 0;
-  bottom: 32px;
   width: 100%;
-  height: 32px;
-  margin-bottom: 0; // overwrite default "alert" style
+  margin-bottom: 0;     // overwrite default "alert" style
+  border: none;
+  padding: 9px 10px;
+
+  .ui-pnotify-title{
+    margin-bottom: 0;   // overwrite default "alert" style
+  }
 }
 
 // reverse order (reverse render order)
@@ -1408,5 +1650,3 @@ Animate the stripes
     background-position: 50px 50px;
   }
 }
-
-

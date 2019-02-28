@@ -8,7 +8,7 @@ define([
     'pnotify.desktop',
     //'pnotify.history',
     'pnotify.callbacks'
-], function($, Init, PNotify) {
+], function($, Init, PNotify){
 
     'use strict';
 
@@ -77,7 +77,6 @@ define([
      * @param settings
      */
     let showNotify = function(customConfig, settings){
-
         customConfig = $.extend(true, {}, config, customConfig );
 
         // desktop notification
@@ -89,6 +88,7 @@ define([
             PNotify.desktop.permission();
 
             customConfig.delay = 10000;
+            customConfig.nonblock.nonblock = false; // true results in error on "click" desktop notification
             customConfig.desktop.desktop = true;
 
             // make browser tab blink
@@ -133,7 +133,16 @@ define([
                 customConfig.icon = false;
         }
 
-        new PNotify(customConfig);
+        let notify = new PNotify(customConfig);
+
+        if(
+            settings &&
+            settings.click
+        ){
+            // set onclick for notification
+            notify.get().on('click', settings.click);
+        }
+
     };
 
     /**
@@ -160,8 +169,8 @@ define([
                 }
             };
 
-            return function () {
-                if (!blinkTimer) {
+            return function(){
+                if(!blinkTimer){
                     blinkTimer = setInterval(blink, 1000);
                 }
             };

@@ -19,16 +19,33 @@ input, select{
     -webkit-text-fill-color: $gray-lighter;
   }
 
-  // file input
+  &[disabled]{
+    @include placeholder(transparent);
+  }
+
+  &.pf-select2{
+    height: 32px; // supposed to be select2 field (before initialization)
+    padding: 6px 12px;
+  }
+}
+
+input[type='number']{
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    margin: 0;
+    display: none;
+  }
+}
+
+input[type='file']{
   &::-webkit-file-upload-button{
     background-color: transparent;
     border: none;
     color: $gray-light;
     outline: none;
-  }
-
-  &[disabled]{
-    @include placeholder(transparent);
   }
 }
 
@@ -53,6 +70,10 @@ fieldset[disabled]{
   }
 }
 
+#select2-pf-map-dialog-edit-icon-select-container,  //select2 head
+#select2-pf-map-dialog-new-icon-select-container,   //select2 head
+#select2-pf-map-dialog-new-icon-select-results,     //Select2 body
+#select2-pf-map-dialog-edit-icon-select-results,    //Select2 body
 .pf-form-icon-field {
   font-family: "Font Awesome 5 Free";
   font-weight: bold;
@@ -63,7 +84,7 @@ fieldset[disabled]{
 }
 
 
-// form fields with icons groups (stacked icons) ==================================================
+// form fields with icons groups (stacked icons) ======================================================================
 .input-icon-left:not(.input-icon-right){
   .fa-stack:first-child{
     left: 14px;
@@ -100,15 +121,38 @@ fieldset[disabled]{
   }
 }
 
-// "fake" button (no user interaction) ============================================================
-.btn-fake{
-  border: none;
-  text-align: left;
-  cursor: default;
-  opacity: 1 !important;
-  color: $gray-light !important;
-  background-color: $gray !important;
+
+// buttons ============================================================================================================
+.btn{
+  // "fake" button (no user interaction)
+  &.btn-fake{
+    border: none;
+    text-align: left;
+    cursor: default;
+    opacity: 1 !important;
+    color: $gray-light !important;
+    background-color: transparent !important;
+  }
+
+  // progress bar inside button
+  .btn-progress{
+    position: absolute;
+    display: block;
+    height: 100%;
+    background-color: rgba($green, .2 );
+    max-width: 100%;
+    width: 0;
+    top: 0;
+    left: 0;
+    overflow: hidden;
+    line-height: 30px;
+    color: $orange-light;
+    font-size: 10px;
+    text-align: left;
+    @include transition( width 0.1s linear);
+  }
 }
+
 
 // drag&drop zone
 .pf-form-dropzone{
@@ -138,4 +182,10 @@ fieldset[disabled]{
   &.btn:active{
     box-shadow: none;
   }
+}
+
+
+.pf-form-field-char-count{
+  display: block;
+  margin-top: 10px;
 }

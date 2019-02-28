@@ -1,11 +1,11 @@
 /*!
  * Pathfinder - Mapping Tool
- * http://pathfinder.exodus4d.de/
+ * https://www.pathfinder-w.space
  *
  * CSS - Cascading Style Sheets
- * Generated with Compass http://compass-style.org/
+ * Generated with Compass http://compass-style.org
  *
- * Copyright 2015 - 2016, Exodus 4D - Mark Friedrich
+ * Copyright 2015 - 2018, Exodus 4D - Mark Friedrich
  *
  */
 
@@ -22,16 +22,16 @@
 
 // load Font Awesome with all its dependencies
 @import "library/fontawesome/fontawesome";
-@import "library/fontawesome/fa-regular";
-@import "library/fontawesome/fa-solid";
-@import "library/fontawesome/fa-brands";
+@import "library/fontawesome/regular";
+@import "library/fontawesome/solid";
+@import "library/fontawesome/brands";
 
 // Libraries (Remove if not needed)
 @import "library/custom-scrollbar/_mCustomScrollbar";               // malihu-custom-scrollbar-plugin
 @import "library/data-tables/_all";                                 // DataTables 1.10.12 + extensions
 
 @import "library/x-editable/_bootstrap-editable";                   // X-editable - v1.5.1
-@import "library/pnotify/_pnotify";                                 // PNotify styles - v3.0.0
+@import "library/pnotify/_pnotify";                                 // PNotify styles - v3.2.0
 @import "library/pnotify/_pnotify.nonblock";
 @import "library/pnotify/_pnotify.custom";                          // PNotify custom styles
 @import "library/slidebars/_slidebars";                             // Slidebars Navigation
@@ -41,8 +41,9 @@
 @import "library/blue-imp-gallery/_blueimp-gallery";                // Blue Imp Gallery
 @import "library/blue-imp-gallery/_bootstrap-image-gallery";        // Blue Imp Gallery Bootstrap
 @import "library/blue-imp-gallery/_bootstrap-image-gallery";        // Blue Imp Gallery Bootstrap
-@import "library/bootstrap-toggle/_bootstrap-toggle";              // Bootstrap Toggle v2.2.0
+@import "library/bootstrap-toggle/_bootstrap-toggle";               // Bootstrap Toggle v2.2.0
 @import "library/bootstrap-checkbox/_awesome-bootstrap-checkbox";   // Bootstrap Customized Checkboxes v0.3.7 - https://github.com/flatlogic/awesome-bootstrap-checkbox
+@import "library/summernote/summernote";                            // Summernote WYSIWYG editor v0.8.10
 
 // Main THEME (Imports by order - do not change order)
 @import "main";

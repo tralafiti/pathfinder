@@ -23,7 +23,7 @@ abstract class AbstractMapTrackingModel extends BasicModel implements LogModelIn
                     'on-delete' => 'CASCADE'
                 ]
             ],
-            'validate' => 'validate_notDry'
+            'validate' => 'notDry'
         ],
         'updatedCharacterId' => [
             'type' => Schema::DT_INT,
@@ -35,7 +35,7 @@ abstract class AbstractMapTrackingModel extends BasicModel implements LogModelIn
                     'on-delete' => 'CASCADE'
                 ]
             ],
-            'validate' => 'validate_notDry'
+            'validate' => 'notDry'
         ]
     ];
 
@@ -45,32 +45,6 @@ abstract class AbstractMapTrackingModel extends BasicModel implements LogModelIn
      */
     protected function getStaticFieldConf(): array{
         return array_merge(parent::getStaticFieldConf(), $this->trackingFieldConf);
-    }
-
-    /**
-     * validates a model field to be a valid relational model
-     * @param $key
-     * @param $val
-     * @return bool
-     * @throws \Exception\ValidationException
-     */
-    protected function validate_notDry($key, $val): bool {
-        $valid = true;
-        if($colConf = $this->fieldConf[$key]){
-            if(isset($colConf['belongs-to-one'])){
-                if( (is_int($val) || ctype_digit($val)) && (int)$val > 0){
-                    $valid = true;
-                }elseif( is_a($val, $colConf['belongs-to-one']) && !$val->dry() ){
-                    $valid = true;
-                }else{
-                    $valid = false;
-                    $msg = 'Validation failed: "' . get_class($this) . '->' . $key . '" must be a valid instance of ' . $colConf['belongs-to-one'];
-                    $this->throwValidationException($key, $msg);
-                }
-            }
-        }
-
-        return $valid;
     }
 
     /**

@@ -8,6 +8,7 @@
 
 namespace Controller;
 
+use Controller\Ccp\Universe;
 use data\filesystem\Search;
 use DB;
 use DB\SQL;
@@ -31,13 +32,14 @@ class Setup extends Controller {
         'DB_PF_NAME',
         'DB_PF_USER',
         'DB_PF_PASS',
-        'DB_CCP_DNS',
-        'DB_CCP_NAME',
-        'DB_CCP_USER',
-        'DB_CCP_PASS',
+        'DB_UNIVERSE_DNS',
+        'DB_UNIVERSE_NAME',
+        'DB_UNIVERSE_USER',
+        'DB_UNIVERSE_PASS',
         'CCP_SSO_URL',
         'CCP_SSO_CLIENT_ID',
         'CCP_SSO_SECRET_KEY',
+        'CCP_SSO_DOWNTIME',
         'CCP_ESI_URL',
         'CCP_ESI_DATASOURCE',
         'SMTP_HOST',
@@ -66,18 +68,20 @@ class Setup extends Controller {
                 'Model\SystemTypeModel',
                 'Model\SystemStatusModel',
                 'Model\SystemNeighbourModel',
-                'Model\WormholeModel',
                 'Model\RightModel',
                 'Model\RoleModel',
+                'Model\StructureModel',
 
                 'Model\CharacterStatusModel',
                 'Model\ConnectionScopeModel',
+                'Model\StructureStatusModel',
 
                 'Model\CharacterMapModel',
                 'Model\AllianceMapModel',
                 'Model\CorporationMapModel',
 
                 'Model\CorporationRightModel',
+                'Model\CorporationStructureModel',
 
                 'Model\UserCharacterModel',
                 'Model\CharacterModel',
@@ -85,8 +89,6 @@ class Setup extends Controller {
                 'Model\CharacterLogModel',
 
                 'Model\SystemModel',
-                'Model\SystemWormholeModel',
-                'Model\ConstellationWormholeModel',
 
                 'Model\ConnectionModel',
                 'Model\ConnectionLogModel',
@@ -98,32 +100,24 @@ class Setup extends Controller {
                 'Model\SystemPodKillModel',
                 'Model\SystemFactionKillModel',
                 'Model\SystemJumpModel'
-            ],
-            'tables' =>  []
+            ]
         ],
         'UNIVERSE' => [
             'info' => [],
             'models' => [
                 'Model\Universe\TypeModel',
+                'Model\Universe\GroupModel',
+                'Model\Universe\CategoryModel',
                 'Model\Universe\StructureModel',
-                //'Model\Universe\RegionModel',
-                //'Model\Universe\ConstellationModel'
-            ],
-            'tables' =>  []
-        ],
-        'CCP' => [
-            'info' => [],
-            'models' => [],
-            'tables' =>  [
-                'invTypes',
-                'mapConstellations',
-                'mapDenormalize',
-                'mapLocationWormholeClasses',
-                'mapRegions',
-                'mapSolarSystemJumps',
-                'mapSolarSystems'
+                'Model\Universe\WormholeModel',
+                'Model\Universe\StargateModel',
+                'Model\Universe\StarModel',
+                'Model\Universe\PlanetModel',
+                'Model\Universe\SystemModel',
+                'Model\Universe\ConstellationModel',
+                'Model\Universe\RegionModel',
+                'Model\Universe\SystemStaticModel'
             ]
-
         ]
     ];
 
@@ -144,9 +138,10 @@ class Setup extends Controller {
      * @param \Base $f3
      * @param array $params
      * @return bool
-     * @throws \Exception\PathfinderException
      */
     function beforeroute(\Base $f3, $params): bool {
+        $this->initResource($f3);
+
         // init dbLib class. Manages all DB connections
         $this->dbLib = DB\Database::instance();
 
@@ -159,41 +154,50 @@ class Setup extends Controller {
         // body element class
         $f3->set('tplBodyClass', 'pf-landing');
 
-        // js path (build/minified or raw uncompressed files)
-        $f3->set('tplPathJs', 'public/js/' . Config::getPathfinderData('version') );
+        // top navigation configuration
+        $f3->set('tplNavigation', $this->getNavigationConfig());
 
         return true;
     }
 
     /**
      * @param \Base $f3
-     * @throws \Exception\PathfinderException
      */
     public function afterroute(\Base $f3) {
         // js view (file)
         $f3->set('tplJsView', 'setup');
 
         // set render functions (called within template)
-        $f3->set('cacheType', function(){
-            $cacheType = $this->getF3()->get('CACHE');
-            if( strpos($cacheType, 'redis') !== false ){
-                $cacheType = 'redis';
-            }
-            return $cacheType;
-        });
+        $f3->set('cacheType', $this->getCacheType($f3));
 
         // simple counter (called within template)
-        $counter = 0;
-        $f3->set('tplCounter', function(string $action = 'add') use (&$counter){
+        $counter = [];
+        $f3->set('tplCounter', function(string $action = 'increment', string $type = 'default', $val = 0) use (&$counter){
+            $return = null;
             switch($action){
-                case 'add': $counter++; break;
-                case 'get': return $counter; break;
-                case 'reset': $counter = 0; break;
+                case 'increment': $counter[$type]++; break;
+                case 'add': $counter[$type] += (int)$val; break;
+                case 'get': $return = $counter[$type]? : null; break;
+                case 'reset': unset($counter[$type]); break;
             }
+            return $return;
         });
 
         // render view
         echo \Template::instance()->render( Config::getPathfinderData('view.index') );
+    }
+
+    /**
+     * get Cache backend type for F3
+     * @param \Base $f3
+     * @return string
+     */
+    protected function getCacheType(\Base &$f3) : string {
+        $cacheType = $f3->get('CACHE');
+        if(strpos($cacheType, 'redis') !== false){
+            $cacheType = 'redis';
+        }
+        return $cacheType;
     }
 
     /**
@@ -218,9 +222,6 @@ class Setup extends Controller {
                 break;
             case 'fixCols':
                 $fixColumns = true;
-                break;
-            case 'buildIndex':
-                $this->setupSystemJumpTable();
                 break;
             case 'importTable':
                 $this->importTable($params['model']);
@@ -262,102 +263,42 @@ class Setup extends Controller {
         $f3->set('socketInformation', $this->getSocketInformation());
 
         // set index information
-        $f3->set('indexInformation', $this->getIndexData());
+        $f3->set('indexInformation', $this->getIndexData($f3));
 
         // set cache size
         $f3->set('cacheSize', $this->getCacheData($f3));
+
+        // set Redis config check information
+        $f3->set('checkRedisConfig', $this->checkRedisConfig($f3));
     }
 
     /**
-     * IMPORTANT: This function is not required for setup. It just imports *.json -> DB
-     *
-     * imports wormhole static data for "shattered" systems
-     * into table "system_wormhole"
-     * -> a *.csv dump of this *.json file can e found under /export/csv
-     * @param \Base $f3
-     * @throws \Exception
+     * get top navigation configuration
+     * @return array
      */
-    protected function importSystemWormholesFromJson(\Base $f3){
-        $path = $f3->get('EXPORT') .'json/statics.json';
-        $pfDB = $this->getDB('PF');
-        $ccpDB = $this->getDB('CCP');
+    protected function getNavigationConfig() : array {
+        $config = [
+            'server' => [
+                'icon' => 'fa-home'
+            ],
+            'environment' => [
+                'icon' => 'fa-server'
+            ],
+            'settings' => [
+                'icon' => 'fa-sliders-h'
+            ],
+            'database' => [
+                'icon' => 'fa-database'
+            ],
+            'socket' => [
+                'icon' => 'fa-exchange-alt'
+            ],
+            'administration' => [
+                'icon' => 'fa-wrench'
+            ],
+        ];
 
-        $content = file_get_contents($path);
-
-        $jsonIterator = new \RecursiveIteratorIterator(
-            new \RecursiveArrayIterator(json_decode($content, TRUE)),
-            \RecursiveIteratorIterator::SELF_FIRST);
-
-        $staticNames = [];
-
-        $data = [];
-        $tmpVal = (object) [];
-        foreach ($jsonIterator as $key => $val) {
-            if(is_array($val)) {
-                if(isset($tmpVal->name)){
-                    $data[] = $tmpVal;
-                }
-                $tmpVal = (object) [];
-                $tmpVal->name = $key;
-            } else {
-                $tmpVal->wh = isset($tmpVal->wh) ? array_merge($tmpVal->wh, [$val]) :  [$val];
-                $staticNames[] = $val;
-            }
-        }
-        $data[] = $tmpVal;
-
-        // get static IDs by name ------------------------------
-        $staticNames = array_unique($staticNames);
-        $staticNames = array_flip($staticNames);
-        foreach($staticNames as $name => $index){
-            $result  = $pfDB->exec("
-                            SELECT
-                              id
-                            FROM " . $pfDB->quotekey(Model\BasicModel::getNew('WormholeModel')->getTable()) . "
-                            WHERE " . $pfDB->quotekey('name') . " = :name",
-                [':name' => $name]
-            );
-            $id = (int)$result[0]['id'];
-            if($id){
-                $staticNames[$name] = (int)$result[0]['id'];
-            }else{
-                $f3->error(500, 'Wormhole data missing in table "wormhole" for "name" = "' . $name . '"');
-            }
-        }
-
-        // import data -----------------------------------------
-        $systemWormhole = Model\BasicModel::getNew('SystemWormholeModel');
-        foreach($data as $staticData){
-            $result  = $ccpDB->exec("
-                            SELECT
-                              solarSystemID
-                            FROM " . $ccpDB->quotekey('mapSolarSystems') . "
-                            WHERE
-                                " . $ccpDB->quotekey('solarSystemName') . " = :systemName",
-                [':systemName' => $staticData->name]
-            );
-
-            $solarSystemID = (int)$result[0]['solarSystemID'];
-            if($solarSystemID){
-                foreach($staticData->wh as $wh){
-                    $staticId = (int)$staticNames[$wh];
-                    if($staticId){
-                        // check if entry already exists
-                        $systemWormhole->load(['systemId=? AND wormholeId=?', $solarSystemID, $staticId]);
-                        if( $systemWormhole->dry() ){
-                            $systemWormhole->systemId = $solarSystemID;
-                            $systemWormhole->wormholeId = $staticId;
-                            $systemWormhole->save();
-                            $systemWormhole->reset();
-                        }
-                    }else{
-                        $f3->error(500, 'Wormhole data missing for "name" = "' . $wh . '"');
-                    }
-                }
-            }else{
-                $f3->error(500, 'System "' . $staticData->name . '" not found on CCP´s [SDE] database');
-            }
-        }
+        return $config;
     }
 
     /**
@@ -369,8 +310,8 @@ class Setup extends Controller {
         $environmentData = [];
         // exclude some sensitive data (e.g. database, passwords)
         $excludeVars = [
-            'DB_PF_DNS',    'DB_PF_NAME',   'DB_PF_USER',   'DB_PF_PASS',
-            'DB_CCP_DNS',   'DB_CCP_NAME',  'DB_CCP_USER',  'DB_CCP_PASS'
+            'DB_PF_DNS',        'DB_PF_NAME',       'DB_PF_USER',       'DB_PF_PASS',
+            'DB_UNIVERSE_DNS',  'DB_UNIVERSE_NAME', 'DB_UNIVERSE_USER', 'DB_UNIVERSE_PASS'
         ];
 
         // obscure some values
@@ -440,8 +381,8 @@ class Setup extends Controller {
                 'value' => $f3->get('PORT')
             ],
             'protocol' => [
-                'label' => 'Protocol',
-                'value' => strtoupper( $f3->get('SCHEME') )
+                'label' => 'Protocol - scheme',
+                'value' => $f3->get('SERVER.SERVER_PROTOCOL') . ' - ' . $f3->get('SCHEME')
             ]
         ];
 
@@ -534,11 +475,8 @@ class Setup extends Controller {
                 'version' => (extension_loaded('curl') && function_exists('curl_version')) ? 'installed' : 'missing',
                 'check' => (extension_loaded('curl') && function_exists('curl_version'))
             ],
-            [
-                'label' => 'Redis Server [optional]'
-            ],
             'ext_redis' => [
-                'label' => 'Redis',
+                'label' => 'Redis [optional]',
                 'required' => $f3->get('REQUIREMENTS.PHP.REDIS'),
                 'version' => extension_loaded('redis') ? phpversion('redis') : 'missing',
                 'check' => version_compare( phpversion('redis'), $f3->get('REQUIREMENTS.PHP.REDIS'), '>='),
@@ -642,6 +580,13 @@ class Setup extends Controller {
                 'check' => function_exists('exec') == $f3->get('REQUIREMENTS.PHP.EXEC'),
                 'tooltip' => 'exec() funktion. Check "disable_functions" in php.ini'
             ],
+            'memoryLimit' => [
+                'label' => 'memory_limit',
+                'required' => $f3->get('REQUIREMENTS.PHP.MEMORY_LIMIT'),
+                'version' => ini_get('memory_limit'),
+                'check' => ini_get('memory_limit') >= $f3->get('REQUIREMENTS.PHP.MEMORY_LIMIT'),
+                'tooltip' => 'PHP default = 64MB.'
+            ],
             'maxInputVars' => [
                 'label' => 'max_input_vars',
                 'required' => $f3->get('REQUIREMENTS.PHP.MAX_INPUT_VARS'),
@@ -687,6 +632,81 @@ class Setup extends Controller {
         ];
 
         return $phpConfig;
+    }
+
+    /**
+     * check Redis (cache) config
+     * -> only visible if Redis is used as Cache backend
+     * @param \Base $f3
+     * @return array
+     */
+    protected function checkRedisConfig(\Base $f3): array {
+        $redisConfig = [];
+        if($this->getCacheType($f3) === 'redis'){
+            // we need to access the "protected" member $ref from F3´s Cache class
+            // to get access to the underlying Redis() class
+            $ref = new \ReflectionObject($cache = \Cache::instance());
+            $prop = $ref->getProperty('ref');
+            $prop->setAccessible(true);
+            /**
+             * @var $redis \Redis
+             */
+            $redis = $prop->getValue($cache);
+
+            $redisServerInfo = (array)$redis->info('SERVER');
+            $redisMemoryInfo = (array)$redis->info('MEMORY');
+            $redisStatsInfo = (array)$redis->info('STATS');
+
+            $redisConfig = [
+                'redisVersion' => [
+                    'label' => 'redis_version',
+                    'required' => number_format((float)$f3->get('REQUIREMENTS.REDIS.VERSION'), 1, '.', ''),
+                    'version' => $redisServerInfo['redis_version'],
+                    'check' => version_compare( $redisServerInfo['redis_version'], $f3->get('REQUIREMENTS.REDIS.VERSION'), '>='),
+                    'tooltip' => 'Redis server version'
+                ],
+                'maxMemory' => [
+                    'label' => 'maxmemory',
+                    'required' => $this->convertBytes($f3->get('REQUIREMENTS.REDIS.MAX_MEMORY')),
+                    'version' => $this->convertBytes($redisMemoryInfo['maxmemory']),
+                    'check' => $redisMemoryInfo['maxmemory'] >= $f3->get('REQUIREMENTS.REDIS.MAX_MEMORY'),
+                    'tooltip' => 'Max memory limit for Redis'
+                ],
+                'usedMemory' => [
+                    'label' => 'used_memory',
+                    'version' => $this->convertBytes($redisMemoryInfo['used_memory']),
+                    'check' => $redisMemoryInfo['used_memory'] < $redisMemoryInfo['maxmemory'],
+                    'tooltip' => 'Current memory used by Redis'
+                ],
+                'usedMemoryPeak' => [
+                    'label' => 'used_memory_peak',
+                    'version' => $this->convertBytes($redisMemoryInfo['used_memory_peak']),
+                    'check' => $redisMemoryInfo['used_memory_peak'] <= $redisMemoryInfo['maxmemory'],
+                    'tooltip' => 'Peak memory used by Redis'
+                ],
+                'maxmemoryPolicy' => [
+                    'label' => 'maxmemory_policy',
+                    'required' => $f3->get('REQUIREMENTS.REDIS.MAXMEMORY_POLICY'),
+                    'version' => $redisMemoryInfo['maxmemory_policy'],
+                    'check' => $redisMemoryInfo['maxmemory_policy'] == $f3->get('REQUIREMENTS.REDIS.MAXMEMORY_POLICY'),
+                    'tooltip' => 'How Redis behaves if \'maxmemory\' limit reached'
+                ],
+                'evictedKeys' => [
+                    'label' => 'evicted_keys',
+                    'version' => $redisStatsInfo['evicted_keys'],
+                    'check' => !(bool)$redisStatsInfo['evicted_keys'],
+                    'tooltip' => 'Number of evicted keys due to maxmemory limit'
+                ],
+                'dbSize' . $redis->getDbNum() => [
+                    'label' => 'Size DB (' . $redis->getDbNum() . ')',
+                    'version' => $redis->dbSize(),
+                    'check' => $redis->dbSize() > 0,
+                    'tooltip' => 'Keys found in DB (' . $redis->getDbNum() . ') [Cache DB]'
+                ]
+            ];
+        }
+
+        return $redisConfig;
     }
 
     /**
@@ -768,7 +788,6 @@ class Setup extends Controller {
      * get default map config
      * @param \Base $f3
      * @return array
-     * @throws \Exception\PathfinderException
      */
     protected function getMapsDefaultConfig(\Base $f3): array {
         $matrix = \Matrix::instance();
@@ -876,7 +895,6 @@ class Setup extends Controller {
             switch($dbKey){
                 case 'PF':          $dbLabel = 'Pathfinder';            break;
                 case 'UNIVERSE':    $dbLabel = 'EVE-Online universe';   break;
-                case 'CCP':         $dbLabel = 'EVE-Online [SDE]';      break;
             }
 
             $dbName     = $dbConfigValues['NAME'];
@@ -903,15 +921,6 @@ class Setup extends Controller {
                             ];
                         }
                         break;
-                    case 'CCP':
-                        // get table model from static table array
-                        foreach($dbData['tables'] as $tableName){
-                            $requiredTables[$tableName] = [
-                                'exists' => false,
-                                'empty' => true
-                            ];
-                        }
-                        break;
                 }
 
                 // db connect was successful
@@ -927,7 +936,7 @@ class Setup extends Controller {
                 foreach($requiredTables as $requiredTableName => $data){
 
                     $tableExists = false;
-                    $tableEmpty = true;
+                    $tableRows = 0;
                     // Check if table status is OK (no errors/warnings,..)
                     $tableStatusCheckCount = 0;
 
@@ -939,8 +948,7 @@ class Setup extends Controller {
                         $tableModifierTemp = new MySQL\TableModifier($requiredTableName, $schema);
                         $currentColumns = $tableModifierTemp->getCols(true);
                         // get row count
-                        $countRes = $db->exec("SELECT COUNT(*) `num` FROM " . $db->quotekey($requiredTableName) );
-                        $tableEmpty = $countRes[0]['num'] > 0 ? false : true;
+                        $tableRows = $this->dbLib->getRowCount($requiredTableName, $dbKey);
                     }else{
                         // table missing
                         $dbStatusCheckCount++;
@@ -1119,7 +1127,7 @@ class Setup extends Controller {
                     }
 
                     $dbStatusCheckCount += $tableStatusCheckCount;
-                    $requiredTables[$requiredTableName]['empty'] = $tableEmpty;
+                    $requiredTables[$requiredTableName]['rows'] = $tableRows;
                     $requiredTables[$requiredTableName]['exists'] = $tableExists;
                     $requiredTables[$requiredTableName]['statusCheckCount'] = $tableStatusCheckCount;
                 }
@@ -1334,158 +1342,113 @@ class Setup extends Controller {
         return $socketInformation;
     }
 
-    /** get indexed (cache) data information
+    /**
+     * get indexed (cache) data information
+     * @param \Base $f3
      * @return array
      * @throws \Exception
      */
-    protected function getIndexData(){
+    protected function getIndexData(\Base $f3){
         // active DB and tables are required for obtain index data
         if(!$this->databaseHasError){
+            $categoryUniverseModel = Model\Universe\BasicUniverseModel::getNew('CategoryModel');
+            $systemNeighbourModel = Model\BasicModel::getNew('SystemNeighbourModel');
+
             $indexInfo = [
-                'SystemNeighbourModel' => [
+                'Systems' => [
                     'task' => [
                         [
+                            'action' => 'clearIndex',
+                            'label' => 'Clear',
+                            'icon' => 'fa-times',
+                            'btn' => 'btn-danger'
+                        ],[
                             'action' => 'buildIndex',
-                            'label' => 'build',
+                            'label' => 'Build',
                             'icon' => 'fa-sync',
                             'btn' => 'btn-primary'
                         ]
                     ],
-                    'table' => Model\BasicModel::getNew('SystemNeighbourModel')->getTable(),
-                    'count' => $this->dbLib->getRowCount( Model\BasicModel::getNew('SystemNeighbourModel')->getTable() )
+                    'label' => 'build systems index',
+                    'countBuild' => count((new Universe())->getSystemsIndex()),
+                    'countAll' => count((new Universe())->getSystemIds()),
+                    'tooltip' => 'build up a static search index over all systems found on DB. Do not refresh page until import is complete (check progress)! Runtime: ~5min'
                 ],
+                'Structures' => [
+                    'task' => [
+                        [
+                            'action' => 'buildIndex',
+                            'label' => 'Import',
+                            'icon' => 'fa-sync',
+                            'btn' => 'btn-primary'
+                        ]
+                    ],
+                    'label' => 'import structures data',
+                    'countBuild' => $categoryUniverseModel->getById(65, 0)->getTypesCount(false),
+                    'countAll' => (int)$f3->get('REQUIREMENTS.DATA.STRUCTURES'),
+                    'tooltip' => 'import all structure types (e.g. Citadels) from ESI. Runtime: ~15s'
+                ],
+                'Ships' => [
+                    'task' => [
+                        [
+                            'action' => 'buildIndex',
+                            'label' => 'Import',
+                            'icon' => 'fa-sync',
+                            'btn' => 'btn-primary'
+                        ]
+                    ],
+                    'label' => 'import ships data',
+                    'countBuild' => $categoryUniverseModel->getById(6, 0)->getTypesCount(false),
+                    'countAll' => (int)$f3->get('REQUIREMENTS.DATA.SHIPS'),
+                    'tooltip' => 'import all ships types from ESI. Runtime: ~2min'
+                ],
+                'SystemNeighbour' => [
+                    'task' => [
+                        [
+                            'action' => 'buildIndex',
+                            'label' => 'Build',
+                            'icon' => 'fa-sync',
+                            'btn' => 'btn-primary'
+                        ]
+                    ],
+                    'label' => 'build neighbour index',
+                    'countBuild' => $this->dbLib->getRowCount($systemNeighbourModel->getTable()),
+                    'countAll' =>  (int)$f3->get('REQUIREMENTS.DATA.NEIGHBOURS'),
+                    'tooltip' => 'build up a static search index for route search. This is used as fallback in case ESI is down. Runtime: ~30s'
+
+                ],
+                // All following rows become deprecated
+                /*
                 'WormholeModel' => [
                     'task' => [
                         [
                             'action' => 'exportTable',
-                            'label' => 'export',
+                            'label' => 'Export',
                             'icon' => 'fa-download',
                             'btn' => 'btn-default'
                         ],[
                             'action' => 'importTable',
-                            'label' => 'import',
+                            'label' => 'Import',
                             'icon' => 'fa-upload',
                             'btn' => 'btn-primary'
                         ]
                     ],
-                    'table' => Model\BasicModel::getNew('WormholeModel')->getTable(),
-                    'count' => $this->dbLib->getRowCount( Model\BasicModel::getNew('WormholeModel')->getTable() )
-                ],
-                'SystemWormholeModel' => [
-                    'task' => [
-                        [
-                            'action' => 'exportTable',
-                            'label' => 'export',
-                            'icon' => 'fa-download',
-                            'btn' => 'btn-default'
-                        ],[
-                            'action' => 'importTable',
-                            'label' => 'import',
-                            'icon' => 'fa-upload',
-                            'btn' => 'btn-primary'
-                        ]
-                    ],
-                    'table' => Model\BasicModel::getNew('SystemWormholeModel')->getTable(),
-                    'count' => $this->dbLib->getRowCount( Model\BasicModel::getNew('SystemWormholeModel')->getTable() )
-                ],
-                'ConstellationWormholeModel' => [
-                    'task' => [
-                        [
-                            'action' => 'exportTable',
-                            'label' => 'export',
-                            'icon' => 'fa-download',
-                            'btn' => 'btn-default'
-                        ],[
-                            'action' => 'importTable',
-                            'label' => 'import',
-                            'icon' => 'fa-upload',
-                            'btn' => 'btn-primary'
-                        ]
-                    ],
-                    'table' => Model\BasicModel::getNew('ConstellationWormholeModel')->getTable(),
-                    'count' => $this->dbLib->getRowCount( Model\BasicModel::getNew('ConstellationWormholeModel')->getTable() )
+                    'label' => 'wormhole',
+                    'countBuild' => $this->dbLib->getRowCount($wormholeModel->getTable()),
+                    'countAll' => 89
                 ]
+                */
             ];
         }else{
             $indexInfo = [
-                'SystemNeighbourModel' => [
+                'SystemNeighbour' => [
                     'task' => [],
-                    'table' => 'Fix database errors first!'
+                    'label' => 'Fix database errors first!'
                 ]
             ];
         }
 
         return $indexInfo;
-    }
-
-    /**
-     * This function is just for setting up the cache table 'system_neighbour' which is used
-     * for system jump calculation. Call this function manually when CCP adds Systems/Stargates
-     */
-    protected function setupSystemJumpTable(){
-        $pfDB = $this->getDB('PF');
-        $ccpDB = $this->getDB('CCP');
-
-        $query = "SELECT
-                map_sys.solarSystemID system_id,
-                map_sys.regionID region_id,
-                map_sys.constellationID constellation_id,
-                map_sys.solarSystemName system_name,
-                ROUND( map_sys.security, 4) system_security,
-                (
-                    SELECT
-                        GROUP_CONCAT( NULLIF(map_sys_inner.solarSystemName, NULL) SEPARATOR ':')
-                    FROM
-                        mapSolarSystemJumps map_jump INNER JOIN
-                        mapSolarSystems map_sys_inner ON
-                            map_sys_inner.solarSystemID = map_jump.toSolarSystemID
-                    WHERE
-                        map_jump.fromSolarSystemID = map_sys.solarSystemID
-                ) system_neighbours
-            FROM
-                mapSolarSystems map_sys
-            HAVING
-              -- skip systems without neighbors (e.g. WHs)
-	          system_neighbours IS NOT NULL
-            ";
-
-        $rows = $ccpDB->exec($query);
-
-        if(count($rows) > 0){
-            // switch DB back to pathfinder DB
-
-            // clear cache table
-            $pfDB->exec("TRUNCATE system_neighbour");
-
-            foreach($rows as $row){
-                $pfDB->exec("
-              INSERT INTO
-                system_neighbour(
-                  regionId,
-                  constellationId,
-                  systemName,
-                  systemId,
-                  jumpNodes,
-                  trueSec
-                  )
-              VALUES(
-                :regionId,
-                :constellationId,
-                :systemName,
-                :systemId,
-                :jumpNodes,
-                :trueSec
-            )",
-                [
-                    ':regionId' => $row['region_id'],
-                    ':constellationId' => $row['constellation_id'],
-                    ':systemName' => $row['system_name'],
-                    ':systemId' => $row['system_id'],
-                    ':jumpNodes' => $row['system_neighbours'],
-                    ':trueSec' => $row['system_security']
-                ]);
-            }
-        }
     }
 
     /**
@@ -1552,8 +1515,8 @@ class Setup extends Controller {
      */
     protected function invalidateCookies(\Base $f3){
         $this->getDB('PF');
-        $authentidationModel = Model\BasicModel::getNew('CharacterAuthenticationModel');
-        $results = $authentidationModel->find();
+        $authenticationModel = Model\BasicModel::getNew('CharacterAuthenticationModel');
+        $results = $authenticationModel->find();
         if($results){
             foreach($results as $result){
                 $result->erase();
@@ -1571,8 +1534,8 @@ class Setup extends Controller {
         $result = '0';
         if($bytes){
             $base = log($bytes, 1024);
-            $suffixes = array('', 'KB', 'MB', 'GB', 'TB');
-            $result = round(pow(1024, $base - floor($base)), $precision) .' '. $suffixes[floor($base)];
+            $suffixes = array('', 'KB', 'M', 'GB', 'TB');
+            $result = round(pow(1024, $base - floor($base)), $precision) .''. $suffixes[(int)floor($base)];
         }
         return $result;
     }

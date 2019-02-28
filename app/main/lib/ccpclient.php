@@ -24,7 +24,6 @@ class CcpClient extends \Prefab {
      * get ApiClient instance
      * @param \Base $f3
      * @return ApiClient|null
-     * @throws \Exception\PathfinderException
      */
     protected function getClient(\Base $f3){
         $client = null;
@@ -35,6 +34,7 @@ class CcpClient extends \Prefab {
             $client->setDatasource( Config::getEnvironmentData('CCP_ESI_DATASOURCE') );
             $client->setUserAgent($this->getUserAgent());
             $client->setDebugLevel($f3->get('DEBUG'));
+            //$client->setDebugLogRequests(true);
         }else{
             LogController::getLogger('ERROR')->write(sprintf(Config::ERROR_CLASS_NOT_EXISTS_COMPOSER, ApiClient::class));
         }
@@ -44,7 +44,6 @@ class CcpClient extends \Prefab {
 
     /**
      * @return string
-     * @throws \Exception\PathfinderException
      */
     protected function getUserAgent(){
         $userAgent = '';
@@ -70,7 +69,6 @@ class CcpClient extends \Prefab {
      * @param $name
      * @param $arguments
      * @return array|mixed
-     * @throws \Exception\PathfinderException
      */
     public function __call($name, $arguments){
         $return = [];

@@ -6,85 +6,190 @@
     text-transform: capitalize;
   }
 
+  // system "name" cell should truncate on long names
+  .pf-system-info-name-cell{
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    user-select: all;
+  }
+
   // dynamic area specific for the description field
   .pf-system-info-description-area{
-    min-height: 123px;
+    min-height: 124px;
+    padding: 0; // overwrite default "pf-dynamic-area"
 
-    // textarea system description
-    .editable-container{
-      width: 100%;
-      .editableform{
-        width: 100%;
-        .form-group{
-          width: 100%;
-          .editable-input{
-            width: calc(100% - 75px);
-            textarea{
-              width: 100%;
-              max-height: 200px;
-              resize: vertical;
-            }
-          }
-        }
+    .pf-system-info-description-button{
+      position: absolute;
+      right: 10px;
+      top: 13px;
+    }
+
+    .pf-system-info-description{
+      padding: 10px;
+      user-select: text;
+    }
+
+    .note-toolbar{
+      kbd{
+        padding: 3px 4px;
+      }
+
+      .note-customBtn{
+        float: right; // customBtn group should be right
+      }
+
+      @include clearfix(); // because of "floating" right button group
+    }
+  }
+
+  // custom wysiwyg editor styles
+  .pf-system-info-description, .note-editable{
+
+    &>h2:first-child, &>h3:first-child{
+      margin-top: 0 !important;  // no margin if first element
+    }
+
+    h2, h3{
+      &:before{
+        font-family: "Font Awesome 5 Free";
+        content: "\f105";
+        font-weight: bold;
+        display: inline-block;
+        margin-right: 3px;
       }
     }
 
-    .pf-form-field-char-count{
-      display: block;
-      margin-top: 10px;
+    h2{
+      font-size: 16px;
+      margin: 15px 0;
+    }
+
+    h3{
+      font-size: 14px;
+      margin: 10px 0;
+    }
+
+    a{
+      &:after{
+        font-family: "Font Awesome 5 Free";
+        content: "\f35d";
+        font-size: 70%;
+        vertical-align: top;
+        font-weight: bold;
+        display: inline-block;
+        margin-left: 2px;
+      }
+    }
+
+    // custom WYSIWYG style
+    hr{
+      border-top: 1px solid $gray-dark;
+    }
+
+    blockquote {
+      padding: 5px 10px;
+      margin: 0 0 10px;
+      font-size: 13px;
+      border-left: 3px solid $teal;
+    }
+
+    ol, ul{
+      padding-left: 20px;
+    }
+
+    ul{
+      list-style: disc;
+    }
+
+    ol{
+      list-style: decimal;
     }
   }
 }
 
-// signature table module ==================================================
-.pf-sig-table-module{
+.modal.link-dialog{
+  .checkbox{
+    display: none;  // hide checkbox for "target" link attribute -> always _blank
+  }
+}
+
+// system signature module ==================================================
+.pf-system-signature-module{
+
+  .progress-label-right{
+    margin-right: 20px;
+    vertical-align: middle;
+    font-size: 11px;
+  }
+
+  // progress bar
+  .pf-system-progress-scanned{
+    display: inline-block;
+    margin-left: 20px;
+    width: calc(100% - 225px);
+
+    .progress{
+      margin-bottom: 3px; // overwrite default
+    }
+  }
 
   // delete signature button
   .pf-sig-table-clear-button{
     will-change: opacity, transform;
     display: none;
+    color: $red-darker;
   }
 
   .pf-sig-table{
     font-size: 10px;
 
-    .pf-sig-table-edit-desc-text{
-      white-space: normal;
-
-      &.editable-empty{
-        border-bottom: none;
-        @extend .pf-dialog-icon-button;
-      }
-    }
-
-    .fa-plus{
-       @extend .pf-dialog-icon-button;
-    }
-
-    // textarea field
-    .pf-editable-description{
-      background-color: $gray-darker;
-      max-height: 50px;
-    }
-
     .pf-sig-table-edit-name-input{
       text-transform: uppercase;
     }
 
-    // table filter fields
-    .pf-editable-filter{
-      // overwrites default xEditable style
-      color: $gray-light;
-      border: none;
-      font-style: normal;
+    // textarea field
+    // overwrite some styles in order to make <textarea> 100% width
+    .editable-container.editable-inline {
+      display: inline;
+      .control-group{
+        display: inline;
+        .editable-input{
+          display: inline;
+        }
+      }
+    }
+
+    .pf-editable-description{
+      width: 100%;
+      background-color: $gray-darker;
+      max-height: 50px;
+      font-size: 11px;
+      line-height: 14px;
+      padding: 3px 6px;
+    }
+
+    .fa-plus{
+      @extend .pf-dialog-icon-button;
     }
   }
-}
 
-// table filter (active) select (popover)
-// -> popover is child from <body>
-.pf-editable-filter-active{
-  min-width: 100px;
+  .pf-sig-table-secondary{
+    // columns should be "inline" with primary table
+    // -> therefore "sortable" must be true even if columns should not be sortable -> now "disable" sortable by CSS
+    th{
+      pointer-events: none;
+
+      &:after{
+        display: none !important;
+      }
+
+      &.pf-table-counter-cell{
+        color: transparent; // hide label for counter columns -> no data here
+      }
+    }
+  }
 }
 
 // system graph module =====================================================
@@ -94,6 +199,10 @@
     position: relative;
     width: 100%;
     height: 100px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    @include transition(height .18s ease-out); // height is reduced when no graph shown
   }
 }
 
@@ -106,12 +215,8 @@
 
     td{
       text-transform: capitalize;
-      
-      & > .fas,  & > .far{
-        font-size: 10px;
-      }
 
-      .fa-sync, .fa-search-plus{
+      .fa-sync, .fa-search{
         @extend .pf-dialog-icon-button;
       }
 
@@ -154,27 +259,30 @@
   }
 }
 
+// intel module ============================================================
+.pf-system-intel-module{
+
+  .pf-system-structure-table{
+    font-size: 10px;
+  }
+}
+
 // killboard module ========================================================
 .pf-system-killboard-module{
 
-  .pf-system-killboard-graph-kills{
-    width: 100%;
-    height: 100px;
-    position: relative;
-    margin-bottom: 30px;
+  .pf-system-killboard-label-recent{
+    display: none;
   }
 
   .pf-system-killboard-list{
-    padding-bottom: 10px;
-    border-bottom: 1px solid $gray-darker;
+    padding-bottom: 5px;
 
-
-    li{
-      margin-left: 0;
+    & > li{
+      padding-left: 0;
       overflow: visible;
       min-height: 50px;
-      will-change: margin-left;
-      @include transition( margin-left 0.12s cubic-bezier(0.30, 0.80, 0.80, 1.70));
+      will-change: transform, opacity, margin-left;
+      @include transition( padding-left 0.12s cubic-bezier(0.30, 0.80, 0.80, 1.70));
 
       // character headline
       h5{
@@ -187,19 +295,47 @@
         display: inline-block;
       }
 
-      .pf-system-killboard-img-corp{
+      .pf-system-killboard-img-char{
+        display: inline;
+        width: 32px;
+        margin-top: 9px;
         margin-right: 10px;
-        width: 16px;
+        border: 1px solid $gray-darker;
+        will-change: border-color;
+        @include border-radius(50%);
+        @include transition( border-color 0.12s ease-out);
+
+        &:hover{
+          border-color: $teal-lighter;
+        }
+      }
+
+      .pf-system-killboard-img-corp,
+      .pf-system-killboard-img-ally{
+        display: inline;
+        width: 20px;
+        margin-right: 10px;
+        border: 1px solid $gray-darker;
+        will-change: border-color;
+        @include border-radius(50%);
+        @include transition( border-color 0.12s ease-out);
+
+        &:hover{
+          border-color: $teal-lighter;
+        }
       }
 
       .pf-system-killboard-img-ship{
         width: 50px;
         margin-right: 10px;
         border: 1px solid $gray-darker;
-        transform: translateZ(1px);
         will-change: border-color;
-        @include border-radius(25px);
+        @include border-radius(50%);
         @include transition( border-color 0.12s ease-out);
+
+        &:hover{
+          border-color: $teal-lighter;
+        }
       }
 
       &:before{
@@ -208,8 +344,8 @@
         font-weight: bold;
         position: absolute;
         z-index: 10;
-        left: -25px;
-        top: 15px;
+        left: -18px;
+        top: 16px;
         color: $teal;
         opacity: 0;
         will-change: opacity, left;
@@ -217,35 +353,27 @@
       }
 
       &:hover{
-        margin-left: 20px;
-
-        .pf-system-killboard-img-ship{
-          border-color: $teal-lighter;
-        }
+        padding-left: 10px;
 
         &:before{
           opacity: 1;
-          left: -20px;
+          left: -3px;
         }
       }
     }
+  }
+
+  .pf-module-control-area{
+    margin-bottom: 0;
   }
 }
 
 // connection info module ==================================================
 .pf-connection-info-module{
-  .row{
+  & > .row{
     display: flex;
     align-items: stretch;
     flex-wrap: wrap;
-  }
-
-  .pf-dynamic-area{
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-bottom: 10px;
-    min-height: inherit;
   }
 
   .pf-connection-info-table{
@@ -253,8 +381,8 @@
     font-size: 10px;
 
     td{
-      & > .fas, & > .far{
-        font-size: 10px;
+      .fa-plus{
+        @extend .pf-dialog-icon-button;
       }
     }
   }

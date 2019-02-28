@@ -32,6 +32,7 @@ class CharacterModel extends BasicModel {
     const AUTHORIZATION_STATUS = [
         'OK'            => true,                                        // success
         'UNKNOWN'       => 'error',                                     // general authorization error
+        'CHARACTER'     => 'failed to match character whitelist',
         'CORPORATION'   => 'failed to match corporation whitelist',
         'ALLIANCE'      => 'failed to match alliance whitelist',
         'KICKED'        => 'character is kicked',
@@ -180,7 +181,7 @@ class CharacterModel extends BasicModel {
             // no cached character data found
 
             $characterData = (object) [];
-            $characterData->id = $this->id;
+            $characterData->id = $this->_id;
             $characterData->name = $this->name;
             $characterData->role = $this->roleId->getData();
             $characterData->shared = $this->shared;
@@ -299,8 +300,9 @@ class CharacterModel extends BasicModel {
 
     /**
      * setter for "banned" status
-     * @param bool|int $status
-     * @return mixed
+     * @param $status
+     * @return mixed|string|null
+     * @throws \Exception
      */
     public function set_banned($status){
         if($this->allowBanChange){
@@ -330,10 +332,9 @@ class CharacterModel extends BasicModel {
         $logLocation = (bool)$logLocation;
         if(
             !$logLocation &&
-            $logLocation !== $this->logLocation &&
-            $this->hasLog()
+            $logLocation !== $this->logLocation
         ){
-            $this->getLog()->erase();
+            $this->deleteLog();
         }
 
         return $logLocation;
@@ -405,6 +406,7 @@ class CharacterModel extends BasicModel {
      */
     private function resetAdminColumns(){
         $this->kick();
+        $this->ban();
     }
 
     /**
@@ -473,7 +475,6 @@ class CharacterModel extends BasicModel {
      * get ESI API "access_token" from OAuth
      * @return bool|mixed
      * @throws \Exception
-     * @throws \Exception\PathfinderException
      */
     public function getAccessToken(){
         $accessToken = false;
@@ -544,7 +545,6 @@ class CharacterModel extends BasicModel {
      * checks whether this character is authorized to log in
      * -> check corp/ally whitelist config (pathfinder.ini)
      * @return bool
-     * @throws \Exception\PathfinderException
      */
     public function isAuthorized(){
         $authStatus = 'UNKNOWN';
@@ -552,25 +552,39 @@ class CharacterModel extends BasicModel {
         // check whether character is banned or temp kicked
         if(is_null($this->banned)){
             if( !$this->isKicked() ){
+                $whitelistCharacter = array_filter( array_map('trim', (array)Config::getPathfinderData('login.character') ) );
                 $whitelistCorporations = array_filter( array_map('trim', (array)Config::getPathfinderData('login.corporation') ) );
                 $whitelistAlliance = array_filter( array_map('trim', (array)Config::getPathfinderData('login.alliance') ) );
 
                 if(
+                    empty($whitelistCharacter) &&
                     empty($whitelistCorporations) &&
                     empty($whitelistAlliance)
                 ){
                     // no corp/ally restrictions set -> any character is allowed to login
                     $authStatus = 'OK';
                 }else{
+                    // check if character is set in whitelist
+                    if(
+                        !empty($whitelistCharacter) &&
+                        in_array((int)$this->_id, $whitelistCharacter)
+                    ){
+                        $authStatus =  'OK';
+                    }else{
+                        $authStatus = 'CHARACTER';
+                    }
+
                     // check if character corporation is set in whitelist
                     if(
+                        $authStatus != 'OK' &&
                         !empty($whitelistCorporations) &&
-                        $this->hasCorporation() &&
-                        in_array((int)$this->get('corporationId', true), $whitelistCorporations)
+                        $this->hasCorporation()
                     ){
-                        $authStatus = 'OK';
-                    }else{
-                        $authStatus = 'CORPORATION';
+                        if( in_array((int)$this->get('corporationId', true), $whitelistCorporations) ){
+                            $authStatus = 'OK';
+                        }else{
+                            $authStatus = 'CORPORATION';
+                        }
                     }
 
                     // check if character alliance is set in whitelist
@@ -600,7 +614,6 @@ class CharacterModel extends BasicModel {
      * get Pathfinder role for character
      * @return RoleModel
      * @throws \Exception
-     * @throws \Exception\PathfinderException
      */
     public function requestRole() : RoleModel{
         $role = null;
@@ -646,7 +659,6 @@ class CharacterModel extends BasicModel {
      * request all corporation roles granted to this character
      * @return array
      * @throws \Exception
-     * @throws \Exception\PathfinderException
      */
     protected function requestRoles(){
         $rolesData = [];
@@ -752,7 +764,16 @@ class CharacterModel extends BasicModel {
                             if( !empty($lookupUniverseIds) ){
                                 // get "more" information for some Ids (e.g. name)
                                 $universeData = self::getF3()->ccpClient->getUniverseNamesData($lookupUniverseIds, $additionalOptions);
-                                if( !empty($universeData) ){
+
+                                if( !empty($universeData) && !isset($universeData['error']) ){
+                                    // We expect max ONE system AND/OR station data, not an array of e.g. systems
+                                    if(!empty($universeData['system'])){
+                                        $universeData['system'] = reset($universeData['system']);
+                                    }
+                                    if(!empty($universeData['station'])){
+                                        $universeData['station'] = reset($universeData['station']);
+                                    }
+
                                     $logData = array_replace_recursive($logData, $universeData);
                                 }else{
                                     // this is important! universe data is a MUST HAVE!
@@ -894,12 +915,8 @@ class CharacterModel extends BasicModel {
             }
         }
 
-        if(
-            $deleteLog &&
-            $this->hasLog()
-        ){
-            // delete existing log
-            $this->characterLog->erase();
+        if($deleteLog){
+            $this->deleteLog();
         }
 
         return $this;
@@ -1002,7 +1019,6 @@ class CharacterModel extends BasicModel {
     /**
      * get all accessible map models for this character
      * @return MapModel[]
-     * @throws \Exception\PathfinderException
      */
     public function getMaps(){
         $this->filter(

@@ -6,7 +6,7 @@
  * proofed, signature names (copy & paste from scanning window)
  */
 
-define(['jquery'], function($) {
+define(['jquery'], ($) => {
 
     'use strict';
 
@@ -95,13 +95,14 @@ define(['jquery'], function($) {
                     5: 'Ordinary Perimeter Reservoir' //*
                 },
                 5: {    // Wormhole
+                    // all k-space exits are static or K162
                     1: 'H121 - C1',
                     2: 'C125 - C2',
                     3: 'O883 - C3',
                     4: 'M609 - C4',
                     5: 'L614 - C5',
                     6: 'S804 - C6',
-                    7: 'F135 - Thera'
+                    7: 'F353 - Thera'
                 },
                 6: {    // ORE
                     1: 'Ordinary Perimeter Deposit', //*
@@ -138,6 +139,7 @@ define(['jquery'], function($) {
                     5: 'Ordinary Perimeter Reservoir' //*
                 },
                 5: {    // Wormhole
+                    // all w-space -> w-space are statics or K162
                     1: 'Z647 - C1',
                     2: 'D382 - C2',
                     3: 'O477 - C3',
@@ -183,6 +185,7 @@ define(['jquery'], function($) {
                     7: 'Vast Frontier Reservoir' //*
                 },
                 5: {    // Wormhole
+                    // all k-space exits are static or K162
                     1: 'V301 - C1',
                     2: 'I182 - C2',
                     3: 'N968 - C3',
@@ -228,8 +231,11 @@ define(['jquery'], function($) {
                     7: 'Bountiful Frontier Reservoir' //*
                 },
                 5: {    // Wormhole
-                    // no *wandering* w-space -> k-space wormholes
+                    // no *wandering* w-space -> w-space
                     // all holes are statics or K162
+                    1: 'S047 - H',
+                    2: 'N290 - L',
+                    3: 'K329 - 0.0'
                 },
                 6: {    // ORE
                     1: 'Ordinary Perimeter Deposit', //*
@@ -270,10 +276,9 @@ define(['jquery'], function($) {
                     9: 'Vital Core Reservoir' //*
                 },
                 5: {    // Wormhole
-                    1: 'D792 - HS',
-                    2: 'C140 - LS',
-                    3: 'Z142 - 0.0',
-                    4: 'F135 - Thera'
+                    1: 'D792 - H',
+                    2: 'C140 - L',
+                    3: 'Z142 - 0.0'
                 },
                 6: {    // ORE
                     1: 'Average Frontier Deposit', //*
@@ -318,10 +323,12 @@ define(['jquery'], function($) {
                     9: 'Vital Core Reservoir' //*
                 },
                 5: {    // Wormhole
-                    1: 'D792 - HS',
-                    2: 'C391 - LS',
-                    3: 'C248 - 0.0',
-                    4: 'F135 - Thera'
+                    1: 'B520 - H',
+                    2: 'D792 - H',
+                    3: 'C140 - L',
+                    4: 'C391 - L',
+                    5: 'C248 - 0.0',
+                    6: 'Z142 - 0.0'
                 },
                 6: {    // ORE
                     1: 'Ordinary Perimeter Deposit', //*
@@ -354,15 +361,15 @@ define(['jquery'], function($) {
                     16: 'U574 - C6',
                     17: 'V753 - C6',
                     18: 'W237 - C6',
-                    19: 'B274 - HS',
-                    20: 'D792 - HS',
-                    21: 'D845 - HS',
-                    22: 'N110 - HS',
-                    23: 'A239 - LS',
-                    24: 'C391 - LS',
-                    25: 'J244 - LS',
-                    26: 'U201 - LS',    // ??
-                    27: 'U210 - LS',
+                    19: 'B274 - H',
+                    20: 'D792 - H',
+                    21: 'D845 - H',
+                    22: 'N110 - H',
+                    23: 'A239 - L',
+                    24: 'C391 - L',
+                    25: 'J244 - L',
+                    26: 'U201 - L',    // ??
+                    27: 'U210 - L',
                     28: 'C248 - 0.0',
                     29: 'E545 - 0.0',
                     30: 'K346 - 0.0',
@@ -376,13 +383,13 @@ define(['jquery'], function($) {
                     1: 'Z971 - C1',
                     2: 'R943 - C2',
                     3: 'X702 - C3',
-                    // no C4
-                    4: 'M555 - C5',
-                    5: 'B041 - C6',
-                    6: 'A641 - HS',
-                    7: 'R051 - LS',
-                    8: 'V283 - 0.0',
-                    9: 'T458 - Thera'
+                    4: 'O128 - C4',
+                    5: 'M555 - C5',
+                    6: 'B041 - C6',
+                    7: 'A641 - H',
+                    8: 'R051 - L',
+                    9: 'V283 - 0.0',
+                    10: 'T458 - Thera'
                 }
             },
             11: {   // Low Sec
@@ -390,13 +397,13 @@ define(['jquery'], function($) {
                     1: 'Z971 - C1',
                     2: 'R943 - C2',
                     3: 'X702 - C3',
-                    // no C4
-                    4: 'N432 - C5',
-                    5: 'U319 - C6',
-                    6: 'B449 - HS',
-                    7: 'N944 - LS',
-                    8: 'S199 - 0.0',
-                    9: 'M164 - Thera'
+                    4: 'O128 - C4',
+                    5: 'N432 - C5',
+                    6: 'U319 - C6',
+                    7: 'B449 - H',
+                    8: 'N944 - L',
+                    9: 'S199 - 0.0',
+                    10: 'M164 - Thera'
                 }
             },
             12: {   // 0.0
@@ -404,13 +411,13 @@ define(['jquery'], function($) {
                     1: 'Z971 - C1',
                     2: 'R943 - C2',
                     3: 'X702 - C3',
-                    // no C4
-                    4: 'N432 - C5',
-                    5: 'U319 - C6',
-                    6: 'B449 - HS',
-                    7: 'N944 - LS',
-                    8: 'S199 - 0.0',
-                    9: 'L031 - Thera'
+                    4: 'O128 - C4',
+                    5: 'N432 - C5',
+                    6: 'U319 - C6',
+                    7: 'B449 - H',
+                    8: 'N944 - L',
+                    9: 'S199 - 0.0',
+                    10: 'L031 - Thera'
                 }
             }
         }

@@ -48,18 +48,17 @@ docker-compose exec -u www-data php composer install -o
 ### Database seeding
 
 * goto `/setup`
-* for all three databases
+* for all databases
     * click "create database"
 * for "Pathfinder" and "EVE-Online universe"
     * click "setup tables"
     * click " fix columns/keys"`
 * import data (replace *${PASSWORD}*)
-    * `docker-compose exec -T db mysql -p${PASSWORD} pathfinder < export/sql/pathfinder.sql`
-    * `unzip -p export/sql/eve_lifeblood_min.sql.zip | docker container exec -i $(docker-compose ps -q db) mysql -p${PASSWORD} eve_static`
+    * `unzip -p export/sql/eve_universe.sql.zip | docker container exec -i $(docker-compose ps -q db) mysql -p${PASSWORD} eve_universe`
 * import wormhole data and build index
     * scroll all the way down to "Administration" / "Index data"
     * click "build"
-    * click all three "import" buttons
+    * click all "import" buttons
     
 ### SSL
 

@@ -10,6 +10,7 @@ namespace Controller;
 
 use Controller\Ccp as Ccp;
 use lib\Config;
+use lib\Resource;
 
 class AppController extends Controller {
 
@@ -28,7 +29,7 @@ class AppController extends Controller {
 
         if($return = parent::beforeroute($f3, $params)){
             // href for SSO Auth
-            $f3->set('tplAuthType', $f3->alias( 'sso', ['action' => 'requestAuthorization'] ));
+            $f3->set('tplAuthType', $f3->get('BASE') . $f3->alias( 'sso', ['action' => 'requestAuthorization'] ));
 
             // characters  from cookies
             $f3->set('cookieCharacters', $this->getCookieByName(self::COOKIE_PREFIX_CHARACTER, true));
@@ -64,7 +65,13 @@ class AppController extends Controller {
      * @param \Base $f3
      */
     public function init(\Base $f3) {
-
+        $resource = Resource::instance();
+        $resource->register('script', 'app/login');
+        $resource->register('script', 'app/mappage', 'prefetch');
+        $resource->register('image', 'pf-bg.jpg');
+        $resource->register('image', 'pf-header-bg.jpg');
+        $resource->register('image', 'landing/eve_sso_login_buttons_large_black.png');
+        $resource->register('image', 'landing/eve_sso_login_buttons_large_black_hover.png');
     }
 
     /**

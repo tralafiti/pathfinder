@@ -1,6 +1,6 @@
 define([
     'jquery'
-], function($) {
+], ($) => {
     'use strict';
 
     let allCombo = {
@@ -15,6 +15,12 @@ define([
             group:      'signatures',
             label:      'Select multiple rows',
             keyNames:   ['CONTROL', 'CLICK']
+        },
+        signatureNavigate: {
+            group:      'signatures',
+            label:      'Table navigation',
+            keyNames:   ['UP', 'RIGHT', 'DOWN', 'LEFT'],
+            list: true
         }
     };
 
@@ -25,18 +31,23 @@ define([
             label:      'Reload tab',
             keyNames:   ['CONTROL', 'R']
         },
-        signaturePaste: {
+        clipboardPaste: {
             group:      'global',
-            label:      'Paste signatures from clipboard',
+            label:      'Update signatures/D-Scan from clipboard',
             keyNames:   ['CONTROL', 'V'],
-            alias:  'paste'
+            alias:      'paste'
+        },
+        newSignature: {
+            group:      'signatures',
+            label:      'New Signature',
+            keyNames:   ['ALT', '3']
         },
 
         // map ----------------------------------------------------------------------------------------------
         mapSystemAdd: {
             group:      'map',
-            label:      'Add new system',
-            keyNames:   ['CONTROL', 'S']
+            label:      'New system',
+            keyNames:   ['ALT', '2']
         },
         mapSystemsSelect: {
             group:      'map',
@@ -128,7 +139,7 @@ define([
      * @param index
      * @param array
      */
-    let compareKeyLists = function(element, index, array) {
+    let compareKeyLists = function(element, index, array){
         return this.find(x => x === element);
     };
 
@@ -264,7 +275,8 @@ define([
                 // exclude some HTML Tags from watcher
                 if(
                     e.target.tagName !== 'INPUT' &&
-                    e.target.tagName !== 'TEXTAREA'
+                    e.target.tagName !== 'TEXTAREA' &&
+                    !e.target.classList.contains('note-editable')       // Summerstyle editor
                 ){
                     let key = e.key.toUpperCase();
                     map[key] = true;
@@ -284,10 +296,12 @@ define([
             };
 
             let evKeyUp = (e) => {
-                let key = e.key.toUpperCase();
+                if(e.key){
+                    let key = e.key.toUpperCase();
 
-                if(map.hasOwnProperty(key)){
-                    delete map[key];
+                    if(map.hasOwnProperty(key)){
+                        delete map[key];
+                    }
                 }
             };
 
@@ -300,7 +314,7 @@ define([
             new MutationObserver((mutations) => {
                 mutations.forEach((mutation) => {
                     if(mutation.type === 'childList'){
-                        for (let i = 0; i < mutation.removedNodes.length; i++){
+                        for(let i = 0; i < mutation.removedNodes.length; i++){
                             let removedNode = mutation.removedNodes[i];
                             if(typeof removedNode.getAttribute === 'function'){
                                 let eventNames = removedNode.getAttribute(dataKeyEvents);
@@ -407,19 +421,18 @@ define([
 
     /**
      * get a array with all available shortcut groups and their events
-     * @returns {Array}
+     * @returns {any[]}
      */
     let getGroupedShortcuts = () => {
         let result = $.extend(true, {}, groups);
 
         // add combos and events to groups
         let allEntries = [allCombo, allEvents];
-        for(let i = 0; i < allEntries.length; i++){
-            for(let event in allEntries[i]){
-                let data = allEntries[i][event];
 
+        for(let entries of allEntries){
+            for(let [event, data] of Object.entries(entries)){
                 //format keyNames for UI
-                let keyNames = data.keyNames.map( (key) => {
+                let keyNames = data.keyNames.map(key => {
                     if(key === 'CONTROL'){
                         key = 'ctrl';
                     }
@@ -428,7 +441,8 @@ define([
 
                 let newEventData = {
                     label:      data.label,
-                    keyNames:   keyNames
+                    keyNames:   keyNames,
+                    list:       data.list
                 };
 
                 if( result[data.group].events ){
