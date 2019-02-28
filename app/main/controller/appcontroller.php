@@ -35,6 +35,12 @@ class AppController extends Controller {
             $f3->set('getCharacterGrid', function($characters){
                 return ( ((12 / count($characters)) <= 3) ? 3 : (12 / count($characters)) );
             });
+
+            // warning if setup route is active
+            $routes = $f3->get( 'ROUTES' );
+            $setupRouteIsUnset = !array_key_exists('/setup', $routes);
+            $setupRouteIsRedirect = isset($routes['/setup'][1]['GET'][0]) && $routes['/setup'][1]['GET'][0] === get_class($this) . '->rerouteToMe';
+            $f3->set('setupRouteIsUnreachable', $setupRouteIsUnset || $setupRouteIsRedirect);
         }
 
         return $return;
@@ -59,6 +65,14 @@ class AppController extends Controller {
      */
     public function init(\Base $f3) {
 
+    }
+
+    /**
+     * show main login (index) page
+     * @param \Base $f3
+     */
+    public function rerouteToMe(\Base $f3) {
+        $f3->reroute(['login'], false);
     }
 
 }

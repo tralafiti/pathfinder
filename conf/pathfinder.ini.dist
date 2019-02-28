@@ -1,0 +1,9 @@
+; Use a copy of this file (without .dist) to overwrite Pathfinder configs
+
+[CRON]
+; Disable cron via web-call
+web = FALSE
+
+[routes]
+; Disables /setup: Overwrite route with a redirect to @login
+GET @setup:         /setup                      [sync]  =   Controller\AppController->rerouteToMe
