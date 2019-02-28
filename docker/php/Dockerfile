@@ -5,8 +5,11 @@ RUN apk add --no-cache --virtual .persistent-deps \
         libzmq \
         # for ext-event
         libevent \
+        openssl \
         # for ext-gd
         libpng \
+        # for composer depencendies
+        git \
         # for container (running cron, php and socket)
         supervisor
 
@@ -55,7 +58,6 @@ RUN apk add --no-cache --virtual .install-deps \
     && apk del .install-deps
 
 ARG USER_ID
-
 RUN sed -i -e "s/^\(www-data:[^:]\):[0-9]*:/\1:${USER_ID}:/" /etc/passwd
 
 CMD ["supervisord", "-c", "/etc/supervisord.conf"]
