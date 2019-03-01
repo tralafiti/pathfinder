@@ -1,4 +1,4 @@
-FROM php:7.1-fpm-alpine3.8
+FROM php:7.2-fpm-alpine3.8
 
 RUN apk add --no-cache --virtual .persistent-deps \
         # for ext-zmq
@@ -31,8 +31,8 @@ RUN apk add --no-cache --virtual .build-deps \
         sockets \
     && pecl install \
         zmq-1.1.3 \
-        redis-3.1.6 \
-        event-2.3.0 \
+        redis-4.2.0 \
+        event-2.4.3 \
     && docker-php-ext-enable \
         zmq \
         redis \
@@ -42,7 +42,7 @@ RUN apk add --no-cache --virtual .build-deps \
     
 COPY --from=composer:1 /usr/bin/composer /usr/bin/composer
 
-ENV SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/v0.1.5/supercronic-linux-amd64 \
+ENV SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/v0.1.8/supercronic-linux-amd64 \
     WEBSOCKET_URL=https://github.com/exodus4d/pathfinder_websocket/archive/v1.1.1.tar.gz
 
 RUN apk add --no-cache --virtual .install-deps \
@@ -51,13 +51,16 @@ RUN apk add --no-cache --virtual .install-deps \
     && cd /srv \
     && wget -O /tmp/pathfinder_websocket.tar.gz "${WEBSOCKET_URL}" \
     && tar xf /tmp/pathfinder_websocket.tar.gz --strip-components=1 \
-    && composer install --no-dev --prefer-dist \
+    && composer install --no-dev --prefer-dist --optimize-autoloader \
     && rm /tmp/pathfinder_websocket.tar.gz \
     && wget -O /usr/local/bin/supercronic "${SUPERCRONIC_URL}" \
     && chmod +x /usr/local/bin/supercronic \
     && apk del .install-deps
 
 ARG USER_ID
-RUN sed -i -e "s/^\(www-data:[^:]\):[0-9]*:/\1:${USER_ID}:/" /etc/passwd
+RUN apk add --no-cache --virtual .usermod-deps \
+        shadow \
+    && usermod -u ${USER_ID} www-data \
+    && apk del .usermod-deps
 
 CMD ["supervisord", "-c", "/etc/supervisord.conf"]

@@ -50,15 +50,13 @@ docker-compose exec -u www-data php composer install -o
 * goto `/setup`
 * for all databases
     * click "create database"
-* for "Pathfinder" and "EVE-Online universe"
     * click "setup tables"
     * click " fix columns/keys"`
 * import data (replace *${PASSWORD}*)
     * `unzip -p export/sql/eve_universe.sql.zip | docker container exec -i $(docker-compose ps -q db) mysql -p${PASSWORD} eve_universe`
-* import wormhole data and build index
+* build index
     * scroll all the way down to "Administration" / "Index data"
-    * click "build"
-    * click all "import" buttons
+    * click all the buttons!!
     
 ### SSL
 
