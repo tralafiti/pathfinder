@@ -43,7 +43,7 @@ RUN apk add --no-cache --virtual .build-deps \
 COPY --from=composer:1 /usr/bin/composer /usr/bin/composer
 
 ENV SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/v0.1.8/supercronic-linux-amd64 \
-    WEBSOCKET_URL=https://github.com/exodus4d/pathfinder_websocket/archive/v1.1.1.tar.gz
+    WEBSOCKET_URL=https://github.com/exodus4d/pathfinder_websocket/archive/40c1cc5f7b4d5328a81e051c637491b2d4c25cf1.tar.gz
 
 RUN apk add --no-cache --virtual .install-deps \
         wget \
