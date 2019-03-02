@@ -361,7 +361,7 @@ define([
             }
         },
         mapCompact: {
-            title: 'compact layout',
+            title: 'Fixed Size Systems layout',
             trigger: 'active',
             class: 'pf-map-overlay-compact',
             iconClass: ['fas', 'fa-fw', 'fa-compress']

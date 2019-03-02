@@ -2031,7 +2031,7 @@ define([
     let getSystemPilotsTable = users => {
         let table = '';
         if(users.length > 0){
-            let getRow = (statusClass, userName, shipName, shipTypeName, mass) => {
+            let getRow = (statusClass, userName, shipTypeName) => {
                 let row = '<tr>';
                 row += '<td class="text-right">';
                 row += '<small>';
@@ -2041,28 +2041,18 @@ define([
                 row += '<td>';
                 row += userName;
                 row += '</td>';
-                row += '<td>';
-                row += shipName;
-                row += '</td>';
                 row += '<td class="text-right txt-color txt-color-orangeLight">';
                 row += shipTypeName;
-                row += '</td>';
-                row += '<td class="text-right">';
-                row += mass;
                 row += '</td>';
                 row += '</tr>';
                 return row;
             };
 
-            let massAll = 0;
             table += '<table>';
             for(let user of users){
-                massAll += parseInt(user.log.ship.mass);
                 let statusClass = getStatusInfoForCharacter(user, 'class');
-                let mass = formatMassValue(user.log.ship.mass);
-                table += getRow(statusClass, user.name, user.log.ship.name, user.log.ship.typeName, mass);
+                table += getRow(statusClass, user.name, user.log.ship.typeName);
             }
-            table += getRow(null, '', '', '', formatMassValue(massAll));
             table += '</table>';
         }
 

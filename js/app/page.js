@@ -393,14 +393,9 @@ define([
                 $('<a>', {
                     class: 'list-group-item',
                     id: Util.config.menuButtonCompactId
-                }).html('&nbsp;&nbsp;Compact').prepend(
+                }).html('&nbsp;&nbsp;Fixed Size Systems').prepend(
                     $('<i>',{
                         class: 'fas fa-compress fa-fw'
-                    })
-                ).append(
-                    $('<span>',{
-                        class: 'badge bg-color bg-color-gray txt-color txt-color-warning',
-                        text: 'beta'
                     })
                 ).on('click', function(){
                     Util.getMapModule().getActiveMap().triggerMenuEvent('MapOption', {

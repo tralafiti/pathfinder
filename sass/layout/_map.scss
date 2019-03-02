@@ -236,7 +236,7 @@ $mapWrapperMaxWidth:     $mapWidth + 35px;
     top: 0;
     width: 100%;
     height: 100%;
-    opacity: 0.6;
+    opacity: 0.3;
     background: inline-image("/grid_40x40.png") !important;
   }
 }
@@ -327,19 +327,6 @@ $mapWrapperMaxWidth:     $mapWidth + 35px;
         margin-right: 2px;
       }
 
-      .pf-system-head-counter{
-        display: inline-block;
-        text-align: right;
-        min-width: 8px;
-        margin-right: 1px;
-        color: $green;
-        cursor: help;
-
-        &:empty{
-          display: none;
-        }
-      }
-
       .pf-system-effect{
         font-size: 11px;
       }
@@ -405,6 +392,14 @@ $mapWrapperMaxWidth:     $mapWidth + 35px;
           style: dashed;
           color: $gray-light;
         }
+      }
+
+      .pf-system-body-pilots{
+        display: none; // triggered by compact layout
+      }
+
+      .pf-system-body-static{
+        display: none; // triggered by compact layout
       }
 
       .pf-system-body-item{

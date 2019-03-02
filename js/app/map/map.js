@@ -34,7 +34,6 @@ define([
         systemLockedClass: 'pf-system-locked',                          // class for locked systems on a map
         systemHeadClass: 'pf-system-head',                              // class for system head
         systemHeadNameClass: 'pf-system-head-name',                     // class for system name
-        systemHeadCounterClass: 'pf-system-head-counter',               // class for system user counter
         systemHeadExpandClass: 'pf-system-head-expand',                 // class for system head expand arrow
         systemHeadInfoClass: 'pf-system-head-info',                     // class for system info
         systemBodyClass: 'pf-system-body',                              // class for system body
@@ -43,6 +42,8 @@ define([
         systemBodyItemStatusClass: 'pf-user-status',                    // class for player status in system body
         systemBodyItemNameClass: 'pf-system-body-item-name',            // class for player name in system body
         systemBodyRightClass: 'pf-system-body-right',                   // class for player ship name in system body
+        systemBodyItemPilots: 'pf-system-body-pilots',                  // class for player status in system body
+        systemBodyItemStatic: 'pf-system-body-static',                  // class for static infos in wh system body
         dynamicElementWrapperId: 'pf-dialog-wrapper',                   // wrapper div for dynamic content (dialogs, context-menus,...)
 
         // endpoint classes
@@ -128,67 +129,63 @@ define([
         let systemId = system.attr('id');
         let compactView = Util.getObjVal(options, 'compactView');
 
-        // find countElement -> minimizedUI
-        let systemCount = system.find('.' + config.systemHeadCounterClass);
-
-        // find system body
         let systemBody = system.find('.' + config.systemBodyClass);
-
-        // find expand arrow
+        let pilotsContainer = system.find('.' + config.systemBodyItemPilots);
         let systemHeadExpand = system.find('.' + config.systemHeadExpandClass);
 
         let oldCacheKey = system.data('userCache');
-        let oldUserCount = system.data('userCount');
-        oldUserCount = (oldUserCount !== undefined ? oldUserCount : 0);
+        let oldUserCount = system.data('userCount') || 0;
         let userCounter = 0;
 
         system.data('currentUser', false);
-
         // if current user is in THIS system trigger event
         if(currentUserIsHere){
             system.data('currentUser', true);
         }
 
-        // add user information
-        if(
-            data &&
-            data.user
-        ){
-            let cacheArray = [];
-
-            // we need to add "view mode" option to key
-            // -> if view mode change detected -> key no longer valid
-            cacheArray.push(compactView ? 'compact' : 'default');
-
+        let cacheKey = compactView ? 'compact' : 'default';
+        if(compactView){
+            cacheKey += '_' + String(currentUserIsHere | 0);
+        }
+        if(data && data.user) {
             // loop all active pilots and build cache-key
+            let cacheArray = [];
             for(let i = 0; i < data.user.length; i++){
                 userCounter++;
                 let tempUserData = data.user[i];
                 cacheArray.push(tempUserData.id + '_' + tempUserData.log.ship.id);
             }
-            let cacheKey = cacheArray.join('_');
+            cacheKey += '_' + cacheArray.join('_');
+        }
 
-            // check for if cacheKey has changed
-            if(cacheKey !== oldCacheKey){
-                // set new CacheKey
-                system.data('userCache', cacheKey);
-                system.data('userCount', userCounter);
+        // do we need to update the system?
+        if(cacheKey !== oldCacheKey){
+            system.data('userCache', cacheKey);
+            system.data('userCount', userCounter);
+            systemBody.remove('.' + this.systemBodyItemClass);
 
-                // remove all content
-                systemBody.empty();
+            if(compactView){
+                // Show that I'm here
+                let iconCurrentUser = pilotsContainer.find('i.currentUser').clone().toggle(currentUserIsHere);
+                // If I'm not here: Prefix pilot count with icon
+                let iconPilots = pilotsContainer.find('i.pilots').clone().toggle(!currentUserIsHere && userCounter > 1);
+                // If only 1 pilot is in system: display name. Otherwise pilot count
+                let text = userCounter === 0 ? '-' : userCounter === 1 ? data.user[0].name : userCounter;
+                // Update DOM
+                pilotsContainer.text(text).prepend(iconCurrentUser).prepend(iconPilots);
+                // Highlight if pilot count changed
+                let pilotCountDiff = userCounter - oldUserCount;
+                if(pilotCountDiff !== 0) {
+                    let highlight = pilotCountDiff > 0 ? 'pf-system-body-pilots-increase' : 'pf-system-body-pilots-decrease';
+                    pilotsContainer.addClass(highlight).delay(15000).queue(() => { pilotsContainer.removeClass(highlight).dequeue(); });
+                }
 
-                if(compactView){
-                    // compact system layout-> pilot count shown in systemHead
-                    systemCount.text(userCounter);
-
-                    system.toggleSystemTooltip('destroy', {});
-                    systemHeadExpand.hide();
-                    system.toggleBody(false, map, {});
-
-                    map.revalidate(systemId);
-                }else{
-                    systemCount.empty();
-
+                system.toggleSystemTooltip('destroy', {});
+                systemHeadExpand.hide();
+                system.toggleBody(true, map, {});
+                map.revalidate(systemId);
+            } else {
+                if(userCounter){
                     // show active pilots in body + pilots count tooltip
                     // loop "again" and build DOM object with user information
                     for(let j = 0; j < data.user.length; j++){
@@ -243,25 +240,14 @@ define([
                             map.revalidate( systemId );
                         }
                     });
+                } else {
+                    // reset all elements
+                    system.toggleSystemTooltip('destroy', {});
+                    systemHeadExpand.hide();
+                    system.toggleBody(false, map, {});
+
+                    map.revalidate(systemId);
                 }
-            }
-        }else{
-            // no user data found for this system
-            system.data('userCache', false);
-            system.data('userCount', 0);
-            systemBody.empty();
-
-            if(
-                oldCacheKey &&
-                oldCacheKey.length > 0
-            ){
-                // reset all elements
-                systemCount.empty();
-                system.toggleSystemTooltip('destroy', {});
-                systemHeadExpand.hide();
-                system.toggleBody(false, map, {});
-
-                map.revalidate(systemId);
             }
         }
     };
@@ -367,7 +353,7 @@ define([
                 systemName = data.alias;
             }
 
-            let systemHeadClasses = [config.systemHeadNameClass];
+            let systemHeadClasses = [config.systemHeadNameClass, Util.getNameClassForSystem(data.locked, data.effect)];
             // Abyssal system
             if(data.type.id === 3){
                 systemHeadClasses.push(Util.config.fontTriglivianClass);
@@ -375,7 +361,6 @@ define([
 
             // get system info classes
             let effectBasicClass = MapUtil.getEffectInfoForSystem('effect', 'class');
-            let effectName = MapUtil.getEffectInfoForSystem(data.effect, 'name');
             let effectClass = MapUtil.getEffectInfoForSystem(data.effect, 'class');
             let secClass = Util.getSecurityClassForSystem(data.security);
 
@@ -394,10 +379,6 @@ define([
                     $('<span>', {
                         class: systemHeadClasses.join(' '),
                     }).attr('data-value', systemName),
-                    // System users count
-                    $('<span>', {
-                        class: [config.systemHeadCounterClass, Util.config.popoverTriggerClass].join(' ')
-                    }),
                     // System locked status
                     $('<i>', {
                         class: ['fas', 'fa-lock', 'fa-fw'].join(' ')
@@ -415,8 +396,40 @@ define([
                 ),
                 $('<div>', {
                     class: config.systemBodyClass
-                })
+                }).append(
+                    // System pilot count
+                    $('<span>', {
+                        class: [config.systemBodyItemPilots, Util.config.popoverTriggerClass].join(' '),
+                        text: '-'
+                    }).prepend(
+                        $('<i>', {
+                            class: ['currentUser', 'fas', 'fa-map-marker-alt', 'txt-color', 'txt-color-teal'].join(' ')
+                        }).hide()
+                    ).prepend(
+                        $('<i>', {
+                            class: ['pilots', 'fas', 'fas fa-circle '].join(' ')
+                        }).hide()
+                    )
+                )
             );
+
+            // Static infos in system body (used in compact view)
+            if(data.statics){
+                system.find('.' + config.systemBodyItemPilots).css('max-width', 88 - 18 * data.statics.length);
+                let systemBody = system.find('.' + config.systemBodyClass);
+                for(let i = 0; i < data.statics.length; i++){
+                    let staticData = Object.assign({}, Init.wormholes[data.statics[i]]);
+                    staticData.class = Util.getSecurityClassForSystem( staticData.security );
+
+                    systemBody.append(
+                        $('<span>', {
+                            class: [config.systemBodyItemStatic, staticData.class, Util.config.popoverTriggerClass].join(' '),
+                            'data-name': staticData.name,
+                            text: staticData.security
+                        })
+                    );
+                }
+            }
 
             // set initial system position
             system.css({
@@ -1974,6 +1987,10 @@ define([
             }
         }
 
+        // update name class
+        let nameClass = Util.getNameClassForSystem(system.data('locked'), system.data('effect'));
+        system.find('.' + config.systemHeadNameClass).attr('class', [config.systemHeadNameClass, nameClass].join(' ') );
+
         // repaint connections
         map.revalidate( system.attr('id') );
 
@@ -2396,15 +2413,16 @@ define([
                 let userData = Util.getCurrentMapUserData(mapId);
                 let systemUserData = Util.getCharacterDataBySystemId(userData.data.systems, systemId);
 
-                counterElement.addSystemPilotTooltip(systemUserData, {
-                    trigger: 'manual',
-                    placement: 'right'
-                }).setPopoverSmall().popover('show');
+                if(systemUserData.length){
+                    counterElement.addSystemPilotTooltip(systemUserData, {
+                        trigger: 'manual'
+                    }).setPopoverSmall().popover('show');
+                }
             },
             out: function(e){
                 $(this).destroyPopover();
             },
-            selector: '.' + config.systemHeadCounterClass
+            selector: '.' + config.systemBodyItemPilots
         });
 
         // system "effect" popover ------------------------------------------------------------------------------------
@@ -2418,7 +2436,6 @@ define([
 
                 effectElement.addSystemEffectTooltip(security, effect, {
                     trigger: 'manual',
-                    placement: 'right'
                 }).setPopoverSmall().popover('show');
             },
             out: function(e){
@@ -2437,7 +2454,6 @@ define([
                 if(wormholeData){
                     staticWormholeElement.addWormholeInfoTooltip(wormholeData, {
                         trigger: 'manual',
-                        placement: 'right',
                         smaller: true,
                         show: true
                     });
@@ -2446,7 +2462,7 @@ define([
             out: function(e){
                 $(this).destroyPopover();
             },
-            selector: '.' + config.systemHeadInfoClass + ' span[class^="pf-system-sec-"]'
+            selector: '.' + config.systemHeadInfoClass + ' span[class^="pf-system-sec-"], .' + config.systemBodyItemStatic
         });
 
         // catch events ===============================================================================================
@@ -2512,6 +2528,14 @@ define([
                     MapUtil.storeLocalData('map', this.mapElement.data('id'), this.mapOption.option, 1 );
 
                     notificationText = 'enabled';
+                }
+
+                // redraw systems to reflect new view mode (compact or normal) instantly
+                if(mapOption.option === 'mapCompact') {
+                    let currentMapUserData = Util.getCurrentMapUserData( mapElement.data('id'));
+                    if(currentMapUserData){
+                        updateUserData(mapElement, currentMapUserData).then();
+                    }
                 }
 
                 if(mapOption.toggle){
