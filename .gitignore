@@ -52,6 +52,7 @@ Temporary Items
 .env
 *.gz
 *.lock
+!composer.lock
 /conf/*.ini
 /node_modules/
 /public/js/vX.X.X/

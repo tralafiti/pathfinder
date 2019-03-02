@@ -67,7 +67,7 @@ docker-compose -f docker-compose-dev.yml run --rm node npm run gulp
 
 Gulp build
 ```bash
-docker-compose -f docker-compose-dev.yml run --rm node npm run gulp
+docker-compose -f docker-compose-dev.yml run --rm node npm run gulp production
 ```
 
 Start / Stop Adminder DB Interface
@@ -76,4 +76,13 @@ docker-compose -f docker-compose.yml -f docker-compose-dev.yml up -d adminer
 ```
 ```bash
 docker-compose -f docker-compose-dev.yml rm -s adminer
+```
+
+Backup / restore DB
+```
+docker container exec -i $(docker-compose ps -q db) mysqldump -p${PASSWORD} pathfinder > pathfinder.sql
+```
+
+```bash
+cat pathfinder.sql | docker container exec -i $(docker-compose ps -q db) mysql -p${PASSWORD} pathfinder
 ```
