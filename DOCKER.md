@@ -28,11 +28,6 @@ DB_UNIVERSE_DNS             =   mysql:host=db;port=3306;dbname=
 DB_UNIVERSE_NAME            =   eve_universe
 DB_UNIVERSE_USER            =   root
 DB_UNIVERSE_PASS            =
-
-DB_CCP_DNS                  =   mysql:host=db;port=3306;dbname=
-DB_CCP_NAME                 =   eve_static
-DB_CCP_USER                 =   root
-DB_CCP_PASS                 =
 ```
 * optionally active websocket
 ```
@@ -65,6 +60,20 @@ docker-compose exec -u www-data php composer install -o
 
 ### Development
 
+Gulp watcher
 ```bash
-docker-compose run --rm node npm run gulp
+docker-compose -f docker-compose-dev.yml run --rm node npm run gulp
+```
+
+Gulp build
+```bash
+docker-compose -f docker-compose-dev.yml run --rm node npm run gulp
+```
+
+Start / Stop Adminder DB Interface
+```bash
+docker-compose -f docker-compose.yml -f docker-compose-dev.yml up -d adminer
+```
+```bash
+docker-compose -f docker-compose-dev.yml rm -s adminer
 ```
