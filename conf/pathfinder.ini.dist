@@ -7,7 +7,7 @@
 ;           e.g. public/js/vX.X.X/app.js
 ; Syntax:   String (current version)
 ; Default:  v1.5.0
-VERSION                     =   v1.5.0
+VERSION                     =   v1.5.0-t
 
 [routes]
 ; Disables /setup: Overwrite route with a redirect to @login
