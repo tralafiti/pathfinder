@@ -7,6 +7,7 @@ RUN apk add --no-cache --virtual .persistent-deps \
         libevent \
         openssl \
         # for ext-gd
+        freetype \
         libpng \
         # for composer depencendies
         git \
@@ -22,8 +23,13 @@ RUN apk add --no-cache --virtual .build-deps \
         libevent-dev \
         openssl-dev \
         # for ext-gd \
+        freetype-dev \
         libpng-dev \
     && docker-php-ext-configure pdo_mysql --with-pdo-mysql \
+    && docker-php-ext-configure gd \
+         --with-gd \
+         --with-freetype-dir=/usr/include/ \
+         --with-png-dir=/usr/include/ \
     && docker-php-ext-install \
         pdo_mysql \
         gd \
