@@ -2575,8 +2575,10 @@ define([
                 }
 
                 if(select){
-                    let mapWrapper = mapElement.closest('.' + config.mapWrapperClass);
-                    mapWrapper.scrollToSystem(MapUtil.getSystemPosition(system));
+                    // TODO: check if system is already visible. only scroll if out of bounds. Quickfix: never scroll
+                    //let mapWrapper = mapElement.closest('.' + config.mapWrapperClass);
+                    //mapWrapper.scrollToSystem(MapUtil.getSystemPosition(system));
+
                     // select system
                     MapUtil.showSystemInfo(map, system);
                 }
