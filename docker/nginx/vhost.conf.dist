@@ -24,6 +24,13 @@ server {
 		include         fastcgi_params;
 	}
 
+    # Protect setup with basic auth
+	#location /setup {
+    #    auth_basic           "Bob demands authentication!";
+    #    auth_basic_user_file  /etc/nginx/auth/.htpasswd;
+    #    try_files $uri $uri/ /index.php?$args;
+    #}
+
     # Static sources
     location /public/ {
         sendfile                                    on;

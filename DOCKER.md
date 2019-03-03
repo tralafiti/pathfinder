@@ -14,7 +14,7 @@
 
 ## WORK IN PROGRESS...
 
-### Env-Settings (to be automated)
+### Basic setup
 * copy `.env.dist` to `.env` and fill out
 * copy `app/environment.ini` to `conf/environment.ini`
 * activate docker-db
@@ -35,6 +35,11 @@ SOCKET_HOST                 =   php
 SOCKET_PORT                 =   5555
 ```
 * add other settings for sso etc.
+* copy `docker/nginx/vhost.conf.dist` to `docker/nginx/vhost.conf`
+    * modify `server_name` to fit your url (pathfinder uses this information for redirects)
+    * optionally enable basic auth protection of the /setup-route:
+      * comment in location block
+      * place .htpasswd file in auth-folder
 * install php dependencies
 ```bash
 docker-compose exec -u www-data php composer install -o

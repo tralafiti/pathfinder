@@ -15,6 +15,7 @@ services:
       - ./docker/nginx/http.conf:/etc/nginx/conf.d/00-http.conf:cached
       - ./docker/nginx/vhost.conf:/etc/nginx/conf.d/99-vhost.conf:cached
       - ./docker/nginx/ssl:/etc/nginx/ssl:cached
+      - ./docker/nginx/auth:/etc/nginx/auth:cached
       - .:/var/www/html:cached
 
   php:

@@ -9,6 +9,12 @@
 ; Default:  v1.5.0
 VERSION                     =   v1.5.0-t
 
+; Show warning on 'login' page if /setup route is active
+;           DO NOT disable this warning unless /setup route is protected or commented in routes.ini
+; Syntax:   0 | 1
+; Default:  1
+SHOW_SETUP_WARNING          =   1
+
 [routes]
 ; Disables /setup: Overwrite route with a redirect to @login
 ; Commend out to ENABLE setup
