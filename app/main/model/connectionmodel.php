@@ -81,29 +81,6 @@ class ConnectionModel extends AbstractMapTrackingModel {
     ];
 
     /**
-     * set an array with all data for a system
-     * @param array $data
-     */
-    public function setData($data){
-        unset($data['id']);
-        unset($data['created']);
-        unset($data['updated']);
-        unset($data['createdCharacterId']);
-        unset($data['updatedCharacterId']);
-
-        foreach((array)$data as $key => $value){
-            if( !is_array($value) ){
-                if( $this->exists($key) ){
-                    $this->$key = $value;
-                }
-            }elseif($key == 'type'){
-                // json field
-                $this->$key = $value;
-            }
-        }
-    }
-
-    /**
      * get connection data
      * @param bool $addSignatureData
      * @param bool $addLogData
@@ -141,7 +118,7 @@ class ConnectionModel extends AbstractMapTrackingModel {
      * @return int|number
      */
     public function set_type($type){
-        $newTypes = (array)json_decode($type);
+        $newTypes = (array)$type;
 
         // set EOL timestamp
         if( !in_array('wh_eol', $newTypes) ){
@@ -160,9 +137,9 @@ class ConnectionModel extends AbstractMapTrackingModel {
     /**
      * check object for model access
      * @param CharacterModel $characterModel
-     * @return mixed
+     * @return bool
      */
-    public function hasAccess(CharacterModel $characterModel){
+    public function hasAccess(CharacterModel $characterModel) : bool {
         $access = false;
         if( !$this->dry() ){
             $access = $this->mapId->hasAccess($characterModel);
@@ -172,21 +149,30 @@ class ConnectionModel extends AbstractMapTrackingModel {
 
     /**
      * set default connection type by search route between endpoints
+     * @throws \Exception
      */
     public function setDefaultTypeData(){
         if(
             is_object($this->source) &&
             is_object($this->target)
         ){
-            $routeController = new Route();
-            $route = $routeController->searchRoute($this->source->systemId, $this->target->systemId, 1);
-
-            if($route['routePossible']){
-                $this->scope = 'stargate';
-                $this->type = ['stargate'];
+            if(
+                $this->source->isAbyss() ||
+                $this->target->isAbyss()
+            ){
+                $this->scope = 'abyssal';
+                $this->type = ['abyssal'];
             }else{
-                $this->scope = 'wh';
-                $this->type = ['wh_fresh'];
+                $routeController = new Route();
+                $route = $routeController->searchRoute($this->source->systemId, $this->target->systemId, 1);
+
+                if($route['routePossible']){
+                    $this->scope = 'stargate';
+                    $this->type = ['stargate'];
+                }else{
+                    $this->scope = 'wh';
+                    $this->type = ['wh_fresh'];
+                }
             }
         }
     }
@@ -222,10 +208,10 @@ class ConnectionModel extends AbstractMapTrackingModel {
     }
 
     /**
-     * Event "Hook" function
+     *  Event "Hook" function
      * can be overwritten
      * return false will stop any further action
-     * @param ConnectionModel $self
+     * @param BasicModel $self
      * @param $pkeys
      * @return bool
      * @throws \Exception\DatabaseException
@@ -233,7 +219,7 @@ class ConnectionModel extends AbstractMapTrackingModel {
     public function beforeInsertEvent($self, $pkeys){
         // check for "default" connection type and add them if missing
         // -> get() with "true" returns RAW data! important for JSON table column check!
-        $types = (array)json_decode( $this->get('type', true) );
+        $types = (array)json_decode($this->get('type', true));
         if(
             !$this->scope ||
             empty($types)
@@ -279,8 +265,8 @@ class ConnectionModel extends AbstractMapTrackingModel {
 
     /**
      * @param string $action
-     * @return Logging\LogInterface
-     * @throws \Exception\PathfinderException
+     * @return logging\LogInterface
+     * @throws \Exception\ConfigException
      */
     public function newLog($action = ''): Logging\LogInterface{
         return $this->getMap()->newLog($action)->setTempData($this->getLogObjectData());
@@ -348,10 +334,6 @@ class ConnectionModel extends AbstractMapTrackingModel {
      */
     public function getLogs(){
         $logs = [];
-        $this->filter('connectionLog', [
-            'active = :active',
-            ':active' => 1
-        ]);
 
         if($this->connectionLog){
             $logs = $this->connectionLog;
@@ -379,7 +361,7 @@ class ConnectionModel extends AbstractMapTrackingModel {
      * get all connection log data linked to this connection
      * @return array
      */
-    public function getLogsData() : array{
+    public function getLogsData() : array {
         $logsData = [];
         $logs = $this->getLogs();
 
@@ -390,15 +372,34 @@ class ConnectionModel extends AbstractMapTrackingModel {
         return $logsData;
     }
 
-    public function logMass(CharacterLogModel $characterLog){
+    /**
+     * get blank connectionLog model
+     * @return ConnectionLogModel
+     * @throws \Exception
+     */
+    public function getNewLog() : ConnectionLogModel {
+        /**
+         * @var $log ConnectionLogModel
+         */
+        $log = self::getNew('ConnectionLogModel');
+        $log->connectionId = $this;
+        return $log;
+    }
+
+    /**
+     * log new mass for this connection
+     * @param CharacterLogModel $characterLog
+     * @return ConnectionModel
+     * @throws \Exception
+     */
+    public function logMass(CharacterLogModel $characterLog) : self {
         if( !$characterLog->dry() ){
-            $log = $this->rel('connectionLog');
+            $log = $this->getNewLog();
             $log->shipTypeId = $characterLog->shipTypeId;
             $log->shipTypeName = $characterLog->shipTypeName;
             $log->shipMass = $characterLog->shipMass;
             $log->characterId = $characterLog->characterId->_id;
             $log->characterName = $characterLog->characterId->name;
-            $log->connectionId = $this;
             $log->save();
         }
 
@@ -411,6 +412,7 @@ class ConnectionModel extends AbstractMapTrackingModel {
      * @param null $table
      * @param null $fields
      * @return bool
+     * @throws \Exception
      */
     public static function setup($db=null, $table=null, $fields=null){
         $status = parent::setup($db,$table,$fields);

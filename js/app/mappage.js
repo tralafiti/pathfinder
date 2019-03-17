@@ -32,8 +32,13 @@ define([
         // set default dialog config
         Util.initDefaultBootboxConfig();
 
+        // set default select2 config
+        Util.initDefaultSelect2Config();
+
+        // set default xEditable config
+        Util.initDefaultEditableConfig();
+
         // load page
-        // load info (maintenance) info panel (if scheduled)
         $('body').loadPageStructure().setGlobalShortcuts();
 
         // show app information in browser console
@@ -55,7 +60,7 @@ define([
          * -> stop program from working -> shutdown
          */
         let clearUpdateTimeouts = () => {
-            for(let intervalKey in updateTimeouts) {
+            for(let intervalKey in updateTimeouts){
                 if(updateTimeouts.hasOwnProperty(intervalKey)){
                     clearTimeout(updateTimeouts[intervalKey]);
                 }
@@ -74,15 +79,21 @@ define([
 
             let reason = status + ' ' + jqXHR.status + ': ' + error;
             let errorData = [];
+            let redirect = false;   // redirect user to other page e.g. login
+            let reload = true;      // reload current page (default: true)
 
             if(jqXHR.responseJSON){
                 // handle JSON
-                let errorObj = jqXHR.responseJSON;
+                let responseObj = jqXHR.responseJSON;
                 if(
-                    errorObj.error &&
-                    errorObj.error.length > 0
+                    responseObj.error &&
+                    responseObj.error.length > 0
                 ){
-                    errorData = errorObj.error;
+                    errorData = responseObj.error;
+                }
+
+                if(responseObj.reroute){
+                    redirect = responseObj.reroute;
                 }
             }else{
                 // handle HTML
@@ -93,7 +104,13 @@ define([
             }
 
             console.error(' ↪ %s Error response: %o', jqXHR.url, errorData);
-            $(document).trigger('pf:shutdown', {status: jqXHR.status, reason: reason, error: errorData});
+            $(document).trigger('pf:shutdown', {
+                status: jqXHR.status,
+                reason: reason,
+                error: errorData,
+                redirect: redirect,
+                reload: reload
+            });
         };
 
         // map init functions =========================================================================================
@@ -126,10 +143,12 @@ define([
                     Init.characterStatus    = response.characterStatus;
                     Init.routes             = response.routes;
                     Init.url                = response.url;
+                    Init.character          = response.character;
                     Init.slack              = response.slack;
                     Init.discord            = response.discord;
+                    Init.structureStatus    = response.structureStatus;
+                    Init.universeCategories = response.universeCategories;
                     Init.routeSearch        = response.routeSearch;
-                    Init.programMode        = response.programMode;
 
                     resolve({
                         action: 'initData',
@@ -186,16 +205,14 @@ define([
         let initMapModule = (payload) => {
 
             let initMapModuleExecutor = (resolve, reject) => {
-                // init tab change observer, Once the timers are available
+                // init browser tab change observer, Once the timers are available
                 Page.initTabChangeObserver();
 
-                // init map module
-                mapModule.initMapModule() ;
+                // init hidden context menu elements
+                Page.initMapContextMenus();
 
-                // load info (maintenance) info panel (if scheduled)
-                if(Init.programMode.maintenance){
-                    $('body').showGlobalInfoPanel();
-                }
+                // init map module
+                mapModule.initMapModule();
 
                 resolve({
                     action: 'initMapModule',
@@ -242,19 +259,19 @@ define([
                                 },
                                 onOpen: (MsgWorkerMessage) => {
                                     Util.setSyncStatus(MsgWorkerMessage.command, MsgWorkerMessage.meta());
-                                    MapWorker.send( 'subscribe', response.data);
+                                    MapWorker.send('subscribe', response.data);
 
                                     resolve(getPayload(MsgWorkerMessage.command));
                                 },
                                 onGet: (MsgWorkerMessage) => {
                                     switch(MsgWorkerMessage.task()){
                                         case 'mapUpdate':
-                                            Util.updateCurrentMapData( MsgWorkerMessage.data() );
+                                            Util.updateCurrentMapData(MsgWorkerMessage.data());
                                             ModuleMap.updateMapModule(mapModule);
                                             break;
                                         case 'mapAccess':
                                         case 'mapDeleted':
-                                            Util.deleteCurrentMapData( MsgWorkerMessage.data() );
+                                            Util.deleteCurrentMapData(MsgWorkerMessage.data());
                                             ModuleMap.updateMapModule(mapModule);
                                             break;
                                         case 'mapSubscriptions':
@@ -292,10 +309,10 @@ define([
             .then(payload => Promise.all([initMapModule(payload[0]), initMapWorker(payload[1])]))
             .then(payload => {
                 // mapModule initialized and WebSocket configuration working
-                console.info('%s() complete! command: "%s"; syncStatus: "%s"',
-                    payload[1].action,
-                    payload[1].data.command,
-                    payload[1].data.syncStatus
+                console.ok('Client syncStatus: %s. %O resolved by command: %s!',
+                    payload[1].data.syncStatus,
+                    payload[1].action + '()',
+                    payload[1].data.command
                 );
             })
             .catch(payload => {
@@ -306,10 +323,10 @@ define([
                         break;
                     case 'initMapWorker':
                         // WebSocket not working -> no error here -> fallback to Ajax
-                        console.warn('%s() rejects Promise. command: "%s"; syncStatus: "%s", payload: %o',
-                            payload.action,
-                            payload.data.command,
+                        console.info('Client syncStatus: %s. %O rejected by command: %s! payload: %o',
                             payload.data.syncStatus,
+                            payload.action + '()',
+                            payload.data.command,
                             payload.data
                         );
                         break;
@@ -345,7 +362,7 @@ define([
 
                 // get updated map data
                 let updatedMapData = {
-                    mapData: mapModule.getMapModuleDataForUpdate(),
+                    mapData: ModuleMap.getMapModuleDataForUpdate(mapModule),
                     getUserData: Util.getCurrentUserData() ? 0 : 1
                 };
 
@@ -385,7 +402,7 @@ define([
                         }else{
                             $(document).setProgramStatus('online');
 
-                            if(data.userData !== undefined) {
+                            if(data.userData !== undefined){
                                 // store current user data global (cache)
                                 Util.setCurrentUserData(data.userData);
                             }
@@ -467,7 +484,7 @@ define([
 
                             // update system info panels
                             if(data.system){
-                                mapModule.updateSystemModuleData(data.system);
+                                ModuleMap.updateSystemModulesData(mapModule, data.system);
                             }
 
                             // store current map user data (cache)
@@ -515,7 +532,7 @@ define([
 
             // Send map update request on tab close/reload, in order to save map changes that
             // haven´t been saved through default update trigger
-            window.addEventListener('beforeunload', function(e) {
+            window.addEventListener('beforeunload', function(e){
                 // save unsaved map changes ...
                 triggerMapUpdatePing();
 

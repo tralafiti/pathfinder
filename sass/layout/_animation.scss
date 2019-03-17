@@ -69,6 +69,16 @@
   }
 }
 
+.pf-animation-pulse-danger{
+  @include animation( pulseBackgroundDanger 1s 1 );
+  @include animation-timing-function( cubic-bezier(0.53, -0.03, 0.68, 0.38) );
+
+  .sorting_1{
+    @include animation( pulseBackgroundDangerActive 1s 1 );
+    @include animation-timing-function( cubic-bezier(0.53, -0.03, 0.68, 0.38) );
+  }
+}
+
 @include keyframes(pulseBackgroundSuccess){
   0%   {}
   10%  {
@@ -103,6 +113,23 @@
   100% {}
 };
 
+@include keyframes(pulseBackgroundDanger){
+  0%   {}
+  10%  {
+    background-color: $red;
+    color: $gray-darker;
+  }
+  100% {}
+};
+@include keyframes(pulseBackgroundDangerActive){
+  0%   {}
+  10%  {
+    background-color: darken($red, 5%);
+    color: $gray-darker;
+  }
+  100% {}
+};
+
 // rotate =========================================================================================
 .pf-animate-rotate{
   @include transition( all 0.08s linear );
@@ -114,6 +141,22 @@
 
 .pf-animate-rotate.left{
   @include rotate( -90deg );
+}
+
+// rainbow background =============================================================================
+@keyframes rotateRainbow{
+  0%{
+    background-position-x: 0;
+  }
+  100%{
+    background-position-x: 100vw;
+  }
+}
+
+@mixin rainbow(){
+  background: repeating-linear-gradient(-45deg, $green-light 0%, $teal-lighter 12.5%, $teal-lightest 25%, $green 37.5%, $green-light 50%);
+  background-size:100vw 100vw;
+  @include animation(rotateRainbow 3s infinite linear forwards);
 }
 
 // navigation link active/hover indicator =========================================================

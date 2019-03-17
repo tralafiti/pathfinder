@@ -34,6 +34,8 @@ class Mapper extends \DB\Cursor {
 		$source,
 		//! SQL table (quoted)
 		$table,
+		//! Alias for SQL table
+		$as,
 		//! Last insert ID
 		$_id,
 		//! Defined fields
@@ -153,10 +155,10 @@ class Mapper extends \DB\Cursor {
 
 	/**
 	*	Convert array to mapper object
-	*	@return object
+	*	@return static
 	*	@param $row array
 	**/
-	protected function factory($row) {
+	function factory($row) {
 		$mapper=clone($this);
 		$mapper->reset();
 		foreach ($row as $key=>$val) {
@@ -207,10 +209,13 @@ class Mapper extends \DB\Cursor {
 			'group'=>NULL,
 			'order'=>NULL,
 			'limit'=>0,
-			'offset'=>0
+			'offset'=>0,
+			'comment'=>NULL
 		];
 		$db=$this->db;
 		$sql='SELECT '.$fields.' FROM '.$this->table;
+		if (isset($this->as))
+			$sql.=' AS '.$this->db->quotekey($this->as);
 		$args=[];
 		if (is_array($filter)) {
 			$args=isset($filter[1]) && is_array($filter[1])?
@@ -236,14 +241,16 @@ class Mapper extends \DB\Cursor {
 				explode(',',$options['group'])));
 		}
 		if ($options['order']) {
-			$order=' ORDER BY '.implode(',',array_map(
-				function($str) use($db) {
-					return preg_match('/^\h*(\w+[._\-\w]*)(?:\h+((?:ASC|DESC)[\w\h]*))?\h*$/i',
+			$char=substr($db->quotekey(''),0,1);// quoting char
+			$order=' ORDER BY '.(is_bool(strpos($options['order'],$char))?
+				implode(',',array_map(function($str) use($db) {
+					return preg_match('/^\h*(\w+[._\-\w]*)'.
+						'(?:\h+((?:ASC|DESC)[\w\h]*))?\h*$/i',
 						$str,$parts)?
 						($db->quotekey($parts[1]).
 						(isset($parts[2])?(' '.$parts[2]):'')):$str;
-				},
-				explode(',',$options['order'])));
+				},explode(',',$options['order']))):
+				$options['order']);
 		}
 		// SQL Server fixes
 		if (preg_match('/mssql|sqlsrv|odbc/', $this->engine) &&
@@ -280,12 +287,14 @@ class Mapper extends \DB\Cursor {
 			if ($options['offset'])
 				$sql.=' OFFSET '.(int)$options['offset'];
 		}
+		if ($options['comment'])
+			$sql.="\n".' /* '.$options['comment'].' */';
 		return [$sql,$args];
 	}
 
 	/**
 	*	Build query string and execute
-	*	@return object
+	*	@return static[]
 	*	@param $fields string
 	*	@param $filter string|array
 	*	@param $options array
@@ -344,23 +353,34 @@ class Mapper extends \DB\Cursor {
 	*	@param $ttl int|array
 	**/
 	function count($filter=NULL,array $options=NULL,$ttl=0) {
-		$adhoc='';
+		if (!($subquery_mode=($options && !empty($options['group']))))
+			$this->adhoc['_rows']=['expr'=>'COUNT(*)','value'=>NULL];
+		$adhoc=[];
 		foreach ($this->adhoc as $key=>$field)
-			$adhoc.=','.$field['expr'].' AS '.$this->db->quotekey($key);
-		$fields='*'.$adhoc;
-		if (preg_match('/mssql|dblib|sqlsrv/',$this->engine))
-			$fields='TOP 100 PERCENT '.$fields;
+			// Add all adhoc fields
+			// (make them available for grouping, sorting, having)
+			$adhoc[]=$field['expr'].' AS '.$this->db->quotekey($key);
+		$fields=implode(',',$adhoc);
+		if ($subquery_mode) {
+			if (empty($fields))
+				// Select at least one field, ideally the grouping fields
+				// or sqlsrv fails
+				$fields=preg_replace('/HAVING.+$/i','',$options['group']);
+			if (preg_match('/mssql|dblib|sqlsrv/',$this->engine))
+				$fields='TOP 100 PERCENT '.$fields;
+		}
 		list($sql,$args)=$this->stringify($fields,$filter,$options);
-		$sql='SELECT COUNT(*) AS '.$this->db->quotekey('_rows').' '.
-			'FROM ('.$sql.') AS '.$this->db->quotekey('_temp');
+		if ($subquery_mode)
+			$sql='SELECT COUNT(*) AS '.$this->db->quotekey('_rows').' '.
+				'FROM ('.$sql.') AS '.$this->db->quotekey('_temp');
 		$result=$this->db->exec($sql,$args,$ttl);
+		unset($this->adhoc['_rows']);
 		return (int)$result[0]['_rows'];
 	}
-
 	/**
 	*	Return record at specified offset using same criteria as
 	*	previous load() call and make it active
-	*	@return array
+	*	@return static
 	*	@param $ofs int
 	**/
 	function skip($ofs=1) {
@@ -385,7 +405,7 @@ class Mapper extends \DB\Cursor {
 
 	/**
 	*	Insert new record
-	*	@return object
+	*	@return static
 	**/
 	function insert() {
 		$args=[];
@@ -424,8 +444,8 @@ class Mapper extends \DB\Cursor {
 			}
 		}
 		if ($fields) {
-			$add='';
-			if ($this->engine=='pgsql') {
+			$add=$aik='';
+			if ($this->engine=='pgsql' && !empty($pkeys)) {
 				$names=array_keys($pkeys);
 				$aik=end($names);
 				$add=' RETURNING '.$this->db->quotekey($aik);
@@ -437,12 +457,12 @@ class Mapper extends \DB\Cursor {
 				'INSERT INTO '.$this->table.' ('.$fields.') '.
 				'VALUES ('.$values.')'.$add,$args
 			);
-			if ($this->engine=='pgsql' && $lID)
+			if ($this->engine=='pgsql' && $lID && $aik)
 				$this->_id=$lID[0][$aik];
 			elseif ($this->engine!='oci')
 				$this->_id=$this->db->lastinsertid();
 			// Reload to obtain default and auto-increment field values
-			if ($reload=($inc || $filter))
+			if ($reload=(($inc && $this->_id) || $filter))
 				$this->load($inc?
 					[$inc.'=?',$this->db->value(
 						$this->fields[$inc]['pdo_type'],$this->_id)]:
@@ -463,7 +483,7 @@ class Mapper extends \DB\Cursor {
 
 	/**
 	*	Update current record
-	*	@return object
+	*	@return static
 	**/
 	function update() {
 		$args=[];
@@ -651,8 +671,17 @@ class Mapper extends \DB\Cursor {
 	}
 
 	/**
+	*	Assign alias for table
+	*	@param $alias string
+	**/
+	function alias($alias) {
+		$this->as=$alias;
+		return $this;
+	}
+
+	/**
 	*	Instantiate class
-	*	@param $db object
+	*	@param $db \DB\SQL
 	*	@param $table string
 	*	@param $fields array|string
 	*	@param $ttl int|array

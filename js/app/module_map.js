@@ -5,12 +5,13 @@ define([
     'app/map/map',
     'app/map/util',
     'sortable',
-    'app/ui/system_info',
-    'app/ui/system_graph',
-    'app/ui/system_signature',
-    'app/ui/system_route',
-    'app/ui/system_killboard',
-    'app/ui/connection_info',
+    'app/ui/module/system_info',
+    'app/ui/module/system_graph',
+    'app/ui/module/system_signature',
+    'app/ui/module/system_route',
+    'app/ui/module/system_intel',
+    'app/ui/module/system_killboard',
+    'app/ui/module/connection_info',
     'app/counter'
 ], (
     $,
@@ -23,13 +24,13 @@ define([
     SystemGraphModule,
     SystemSignatureModule,
     SystemRouteModule,
+    SystemIntelModule,
     SystemKillboardModule,
     ConnectionInfoModule
 ) => {
     'use strict';
 
     let config = {
-        dynamicElementWrapperId: 'pf-dialog-wrapper',                           // parent Element for dynamic content (dialogs,..)
         mapTabElementId: 'pf-map-tab-element',                                  // id for map tab element (tabs + content)
         mapTabBarId: 'pf-map-tabs',                                             // id for map tab bar
         mapTabIdPrefix: 'pf-map-tab-',                                          // id prefix for a map tab
@@ -51,6 +52,7 @@ define([
 
         // module
         moduleClass: 'pf-module',                                               // class for a module
+        moduleSpacerClass: 'pf-module-spacer',                                  // class for "spacer" module (preserves height during hide/show animation)
         moduleClosedClass: 'pf-module-closed'                                   // class for a closed module
 
     };
@@ -82,6 +84,7 @@ define([
      * @param tabElement
      */
     let setMapContentObserver = (tabElement) => {
+
         tabElement.on('pf:drawSystemModules', '.' + config.mapTabContentClass, function(e){
             drawSystemModules($(e.target));
         });
@@ -96,7 +99,50 @@ define([
 
         tabElement.on('pf:removeConnectionModules', '.' + config.mapTabContentClass, function(e){
             removeConnectionModules($(e.target));
-        }) ;
+        });
+
+        tabElement.on('pf:updateSystemModules',  '.' + config.mapTabContentClass, function(e, data){
+            updateSystemModules($(e.target), data);
+        });
+
+        tabElement.on('pf:updateRouteModules',  '.' + config.mapTabContentClass, function(e, data){
+            updateRouteModules($(e.target), data);
+        });
+    };
+
+    /**
+     * update (multiple) modules
+     * @param tabContentElement
+     * @param modules
+     * @param data
+     */
+    let updateModules = (tabContentElement, modules, data) => {
+        for(let Module of modules){
+            let moduleElement = tabContentElement.find('.' + Module.config.moduleTypeClass);
+            if(moduleElement.length > 0){
+                Module.updateModule(moduleElement, data);
+            }
+        }
+    };
+
+    /**
+     * update system modules with new data
+     * @param tabContentElement
+     * @param data
+     */
+    let updateSystemModules = (tabContentElement, data) => {
+        let systemModules = [SystemInfoModule, SystemSignatureModule, SystemIntelModule];
+        updateModules(tabContentElement, systemModules, data);
+    };
+
+    /**
+     * update route modules with new data
+     * @param tabContentElement
+     * @param data
+     */
+    let updateRouteModules = (tabContentElement, data) => {
+        let routeModules = [SystemRouteModule];
+        updateModules(tabContentElement, routeModules, data);
     };
 
     /**
@@ -116,7 +162,7 @@ define([
      * @param tabContentElement
      */
     let removeSystemModules = (tabContentElement) => {
-        let systemModules = [SystemInfoModule, SystemGraphModule, SystemSignatureModule, SystemRouteModule, SystemKillboardModule];
+        let systemModules = [SystemInfoModule, SystemGraphModule, SystemSignatureModule, SystemRouteModule, SystemIntelModule, SystemKillboardModule];
         removeModules(tabContentElement, systemModules);
     };
 
@@ -134,19 +180,33 @@ define([
      * @param moduleElement
      * @param Module
      * @param callback
+     * @param addSpacer
      */
-    let removeModule = (moduleElement, Module, callback) => {
+    let removeModule = (moduleElement, Module, callback, addSpacer) => {
         if(moduleElement.length > 0){
-            if(typeof Module.beforeReDraw === 'function'){
-                Module.beforeReDraw();
+            if(typeof Module.beforeHide === 'function'){
+                Module.beforeHide(moduleElement);
             }
 
             moduleElement.velocity('reverse',{
                 complete: function(moduleElement){
                     moduleElement = $(moduleElement);
+                    let oldModuleHeight = moduleElement.outerHeight();
+
                     if(typeof Module.beforeDestroy === 'function'){
                         Module.beforeDestroy(moduleElement);
                     }
+
+                    // [optional] add a "spacer" <div> that fakes Module height during hide->show animation
+                    if(addSpacer){
+                        moduleElement.after($('<div>', {
+                            class: [config.moduleSpacerClass, Module.config.moduleTypeClass + '-spacer'].join(' '),
+                            css: {
+                                height: oldModuleHeight + 'px'
+                            }
+                        }));
+                    }
+
                     moduleElement.remove();
 
                     if(typeof callback === 'function'){
@@ -166,90 +226,120 @@ define([
      */
     let drawModule = (parentElement, Module, mapId, data) => {
 
-        /**
-         * show/render a Module
-         * @param parentElement
-         * @param Module
-         * @param mapId
-         * @param data
-         */
-        let showPanel = (parentElement, Module, mapId, data) => {
-            let moduleElement = Module.getModule(parentElement, mapId, data);
-            if (moduleElement) {
-                // store Module object to DOM element for further access
-                moduleElement.data('module', Module);
-                moduleElement.data('data', data);
-                moduleElement.addClass([config.moduleClass, Module.config.moduleTypeClass].join(' '));
-                moduleElement.css({opacity: 0}); // will be animated
+        let drawModuleExecutor = (resolve, reject) => {
 
-                // check module position from local storage
-                let promiseStore = MapUtil.getLocaleData('map', mapId);
-                promiseStore.then(function (dataStore) {
-                    let Module = this.moduleElement.data('module');
-                    let defaultPosition = Module.config.modulePosition || 0;
+            /**
+             * remove "Spacer" Module
+             * @param parentElement
+             * @param Module
+             */
+            let removeSpacerModule = (parentElement, Module) => {
+                parentElement.find('.' + Module.config.moduleTypeClass + '-spacer').remove();
+            };
 
-                    // check for stored module order in indexDB (client) ----------------------------------------------
-                    let key = 'modules_cell_' + this.parentElement.attr('data-position');
-                    if (
-                        dataStore &&
-                        dataStore[key]
-                    ) {
-                        let positionIndex = dataStore[key].indexOf(Module.config.moduleName);
-                        if (positionIndex !== -1) {
-                            // first index (0) => is position 1
-                            defaultPosition = positionIndex + 1;
-                        }
-                    }
+            /**
+             * show/render a Module
+             * @param parentElement
+             * @param Module
+             * @param mapId
+             * @param data
+             */
+            let showPanel = (parentElement, Module, mapId, data) => {
+                let moduleElement = Module.getModule(parentElement, mapId, data);
+                if(moduleElement){
+                    // store Module object to DOM element for further access
+                    moduleElement.data('module', Module);
+                    moduleElement.data('data', data);
+                    moduleElement.addClass([config.moduleClass, Module.config.moduleTypeClass].join(' '));
+                    moduleElement.css({opacity: 0}); // will be animated
 
-                    // find correct position for new moduleElement ----------------------------------------------------
-                    let position = getModulePosition(this.parentElement, defaultPosition);
+                    // check module position from local storage
+                    let promiseStore = MapUtil.getLocaleData('map', mapId);
+                    promiseStore.then(function(dataStore){
+                        let Module = this.moduleElement.data('module');
+                        let defaultPosition = Module.config.modulePosition || 0;
 
-                    this.moduleElement.attr('data-position', defaultPosition);
-                    this.moduleElement.attr('data-module', Module.config.moduleName);
+                        // hide "spacer" Module (in case it exist)
+                        // -> Must be done BEFORE position calculation! Spacer Modules should not be counted!
+                        removeSpacerModule(this.parentElement, Module);
 
-                    // insert at correct position ---------------------------------------------------------------------
-                    let prevModuleElement = this.parentElement.find('.' + config.moduleClass + ':nth-child(' + position + ')');
-                    if (prevModuleElement.length) {
-                        this.moduleElement.insertAfter(prevModuleElement);
-                    } else {
-                        this.parentElement.prepend(this.moduleElement);
-                    }
-
-                    if (typeof Module.beforeShow === 'function') {
-                        Module.beforeShow(this.moduleElement, moduleElement.data('data'));
-                    }
-
-                    // show animation ---------------------------------------------------------------------------------
-                    this.moduleElement.velocity({
-                        opacity: [1, 0],
-                        translateY: [0, +20]
-                    }, {
-                        duration: Init.animationSpeed.mapModule,
-                        easing: 'easeOutSine',
-                        complete: function (moduleElement) {
-                            moduleElement = $(moduleElement);
-                            let Module = $(moduleElement).data('module');
-                            if (typeof Module.initModule === 'function') {
-                                Module.initModule(moduleElement, mapId, moduleElement.data('data'));
+                        // check for stored module order in indexDB (client) ----------------------------------------------
+                        let key = 'modules_cell_' + this.parentElement.attr('data-position');
+                        if(
+                            dataStore &&
+                            dataStore[key]
+                        ){
+                            let positionIndex = dataStore[key].indexOf(Module.config.moduleName);
+                            if(positionIndex !== -1){
+                                // first index (0) => is position 1
+                                defaultPosition = positionIndex + 1;
                             }
                         }
-                    });
-                }.bind({
-                    parentElement: parentElement,
-                    moduleElement: moduleElement
-                }));
+
+                        // find correct position for new moduleElement ----------------------------------------------------
+                        let position = getModulePosition(this.parentElement, '.' + config.moduleClass, defaultPosition);
+
+                        this.moduleElement.attr('data-position', defaultPosition);
+                        this.moduleElement.attr('data-module', Module.config.moduleName);
+
+                        // insert at correct position ---------------------------------------------------------------------
+                        // -> no :nth-child or :nth-of-type here because there might be temporary "spacer" div "modules"
+                        // that should be ignored for positioning
+                        let prevModuleElement = this.parentElement.find('.' + config.moduleClass).filter(i => ++i === position);
+                        if(prevModuleElement.length){
+                            this.moduleElement.insertAfter(prevModuleElement);
+                        }else{
+                            this.parentElement.prepend(this.moduleElement);
+                        }
+
+                        if(typeof Module.beforeShow === 'function'){
+                            Module.beforeShow(this.moduleElement, moduleElement.data('data'));
+                        }
+
+                        // show animation ---------------------------------------------------------------------------------
+                        this.moduleElement.velocity({
+                            opacity: [1, 0],
+                            translateY: [0, +20]
+                        }, {
+                            duration: Init.animationSpeed.mapModule,
+                            easing: 'easeOutSine',
+                            complete: function(moduleElement){
+                                moduleElement = $(moduleElement);
+                                let Module = $(moduleElement).data('module');
+                                if(typeof Module.initModule === 'function'){
+                                    Module.initModule(moduleElement, mapId, moduleElement.data('data'));
+                                }
+
+                                resolve({
+                                    action: 'drawModule',
+                                    data: {
+                                        module: Module
+                                    }
+                                });
+                            }
+                        });
+                    }.bind({
+                        parentElement: parentElement,
+                        moduleElement: moduleElement
+                    }));
+                }else{
+                    // Module should not be shown (e.g. "Graph" module on WH systems)
+                    removeSpacerModule(parentElement, Module);
+                }
+            };
+
+            // check if module already exists
+            let moduleElement = parentElement.find('.' + Module.config.moduleTypeClass);
+            if(moduleElement.length > 0){
+                removeModule(moduleElement, Module, () => {
+                    showPanel(parentElement, Module, mapId, data);
+                }, true);
+            }else{
+                showPanel(parentElement, Module, mapId, data);
             }
         };
 
-        // check if module already exists
-        let moduleElement = parentElement.find('.' + Module.config.moduleTypeClass);
-        if (moduleElement.length > 0) {
-            removeModule(moduleElement, Module, () => {
-                showPanel(parentElement, Module, mapId, data);
-            });
-        } else {
-            showPanel(parentElement, Module, mapId, data);
-        }
+        return new Promise(drawModuleExecutor);
     };
 
     /**
@@ -257,27 +347,60 @@ define([
      * @param tabContentElement
      */
     let drawSystemModules = (tabContentElement) => {
-        require(['datatables.loader'], function(){
+
+        require(['datatables.loader'], () => {
             let currentSystemData = Util.getCurrentSystemData();
 
-            // get grid cells
+            let promiseDrawAll = [];
+
+            // request "additional" system data (e.g. Structures, Description)
+            // -> this is used to update some modules after initial draw
+            let promiseRequestData = MapUtil.requestSystemData({
+                mapId: currentSystemData.mapId,
+                systemId: currentSystemData.systemData.id
+            });
+
+            // draw modules -------------------------------------------------------------------------------------------
+
             let firstCell = tabContentElement.find('.' + config.mapTabContentCellFirst);
             let secondCell = tabContentElement.find('.' + config.mapTabContentCellSecond);
 
             // draw system info module
-            drawModule(firstCell, SystemInfoModule, currentSystemData.mapId, currentSystemData.systemData);
+            let promiseInfo = drawModule(firstCell, SystemInfoModule, currentSystemData.mapId, currentSystemData.systemData);
 
             // draw system graph module
             drawModule(firstCell, SystemGraphModule, currentSystemData.mapId, currentSystemData.systemData);
 
             // draw signature table module
-            drawModule(firstCell, SystemSignatureModule, currentSystemData.mapId, currentSystemData.systemData);
+            let promiseSignature = drawModule(firstCell, SystemSignatureModule, currentSystemData.mapId, currentSystemData.systemData);
 
             // draw system routes module
             drawModule(secondCell, SystemRouteModule, currentSystemData.mapId, currentSystemData.systemData);
 
+            // draw system intel module
+            let promiseIntel = drawModule(secondCell, SystemIntelModule, currentSystemData.mapId, currentSystemData.systemData);
+
             // draw system killboard module
             drawModule(secondCell, SystemKillboardModule, currentSystemData.mapId, currentSystemData.systemData);
+
+            // update some modules ------------------------------------------------------------------------------------
+            promiseDrawAll.push(promiseRequestData, promiseInfo, promiseSignature, promiseIntel);
+
+            // update "some" modules after draw AND additional system data was requested
+            Promise.all(promiseDrawAll).then(payload => {
+                // get systemData from first Promise (ajax call)
+                let responseData = payload.shift();
+                if(responseData.data){
+                    let systemData = responseData.data;
+
+                    // update all Modules
+                    let modules = [];
+                    for(let responseData of payload){
+                        modules.push(responseData.data.module);
+                    }
+                    updateModules(tabContentElement, modules, systemData);
+                }
+            });
         });
     };
 
@@ -298,15 +421,15 @@ define([
     };
 
     /**
-     * updates current visible/active mapElement in mapModuleElement with user data
-     * @param mapModuleElement
+     * updates current visible/active mapElement in mapModule with user data
+     * @param mapModule
      * @returns {Promise<any>}
      */
-    let updateActiveMapUserData = (mapModuleElement) => {
+    let updateActiveMapUserData = (mapModule) => {
 
         let updateActiveMapModuleExecutor = (resolve, reject) => {
             // get all active map elements for module
-            let mapElement = mapModuleElement.getActiveMap();
+            let mapElement = mapModule.getActiveMap();
 
             updateMapUserData(mapElement).then(payload => resolve());
         };
@@ -335,7 +458,7 @@ define([
                     mapElement.trigger('pf:updateLocal', currentMapUserData);
 
                     // update map with current user data
-                    mapElement.updateUserData(currentMapUserData);
+                    Map.updateUserData(mapElement, currentMapUserData);
                 }
             }
 
@@ -350,22 +473,22 @@ define([
     };
 
     /**
-     * update system info panels (below map)
+     * update active system modules (below map)
+     * @param mapModule
      * @param systemData
      */
-    $.fn.updateSystemModuleData = function(systemData){
-        let mapModule = $(this);
-
+    let updateSystemModulesData = (mapModule, systemData) => {
         if(systemData){
             // check if current open system is still the requested info system
             let currentSystemData = Util.getCurrentSystemData();
 
-            if(currentSystemData){
-                if(systemData.id === currentSystemData.systemData.id){
-                    // trigger system update events
-                    $(document).triggerHandler('pf:updateSystemInfoModule', [systemData]);
-                    $(document).triggerHandler('pf:updateSystemSignatureModule', [systemData]);
-                }
+            if(
+                currentSystemData &&
+                systemData.id === currentSystemData.systemData.id
+            ){
+                // trigger system update events
+                let tabContentElement = $('#' + config.mapTabIdPrefix + systemData.mapId + '.' + config.mapTabContentClass);
+                tabContentElement.trigger('pf:updateSystemModules', [systemData]);
             }
         }
     };
@@ -391,15 +514,15 @@ define([
                 dataIdAttr: 'data-module',
                 sort: true,
                 store: {
-                    get: function (sortable) {
+                    get: function(sortable){
                         return [];
                     },
-                    set: function (sortable) {
+                    set: function(sortable){
                         let key = 'modules_' + sortable.options.group.name;
                         MapUtil.storeLocalData('map', mapId, key, sortable.toArray());
                     }
                 },
-                onStart: function (e) {
+                onStart: function(e){
                     // Element dragging started
                     // -> save initial sort state -> see store.set()
                     this.save();
@@ -417,23 +540,25 @@ define([
             let clickY = e.pageY - posY;
 
             // check for top-left click
-            if(clickX <= 8 && clickY <= 8){
+            if(clickX <= 9 && clickY <= 9 && clickX >= 0 && clickY >= 0){
 
                 // remember height
-                if(! moduleElement.data('origHeight')){
+                if( !moduleElement.data('origHeight') ){
                     moduleElement.data('origHeight', moduleElement.outerHeight());
                 }
 
-                if(moduleElement.hasClass( config.moduleClosedClass )){
+                if(moduleElement.hasClass(config.moduleClosedClass)){
                     let moduleHeight = moduleElement.data('origHeight');
                     moduleElement.velocity('finish').velocity({
                         height: [ moduleHeight + 'px', [ 400, 15 ] ]
                     },{
                         duration: 400,
                         easing: 'easeOutSine',
-                        complete: function(){
-                            moduleElement.removeClass( config.moduleClosedClass );
+                        complete: function(moduleElement){
+                            moduleElement = $(moduleElement);
+                            moduleElement.removeClass(config.moduleClosedClass);
                             moduleElement.removeData('origHeight');
+                            moduleElement.css({height: ''});
                         }
                     });
                 }else{
@@ -442,8 +567,9 @@ define([
                     },{
                         duration: 400,
                         easing: 'easeOutSine',
-                        complete: function(){
-                            moduleElement.addClass( config.moduleClosedClass );
+                        complete: function(moduleElement){
+                            moduleElement = $(moduleElement);
+                            moduleElement.addClass(config.moduleClosedClass);
                         }
                     });
                 }
@@ -515,13 +641,14 @@ define([
     /**
      * get module position
      * @param parentElement
+     * @param childSelector
      * @param defaultPosition
      * @returns {number}
      */
-    let getModulePosition = (parentElement, defaultPosition) => {
+    let getModulePosition = (parentElement, childSelector, defaultPosition) => {
         let position = 0;
         if(defaultPosition > 0){
-            parentElement.children().each((i, moduleElement) => {
+            parentElement.children(childSelector).each((i, moduleElement) => {
                 position = i + 1;
                 let tempPosition = parseInt(moduleElement.getAttribute('data-position')) || 0;
                 if(tempPosition >= defaultPosition){
@@ -559,17 +686,17 @@ define([
                     return !Boolean(mapId);
                 },
                 store: {
-                    get: function (sortable) {
+                    get: function(sortable){
                         return [];
                     },
-                    set: function (sortable) {
+                    set: function(sortable){
                         let key = 'maps_' + sortable.options.group.name;
                         // convert string array to int array
                         let order = sortable.toArray().map((x) => parseInt(x, 10));
                         MapUtil.storeLocalData('character', characterId, key, order);
                     }
                 },
-                onStart: function (e) {
+                onStart: function(e){
                     // Element dragging started
                     // -> save initial sort state -> see store.set()
                     this.save();
@@ -590,7 +717,7 @@ define([
 
                 if(mapTabChangeBlocked === false){
                     let tabLinkElement = $(this);
-                    let mapId = tabLinkElement.data('map-id');
+                    let mapId = tabLinkElement.data('mapId');
 
                     // ignore "add" tab. no need for map change
                     if(mapId > 0){
@@ -604,7 +731,7 @@ define([
                             mapElement.data('frozen', true);
 
                             // hide current map with animation
-                            mapElement.visualizeMap('hide', function(){
+                            MapUtil.visualizeMap(mapElement, 'hide').then(payload => {
                                 // un-block map tabs
                                 mapTabChangeBlocked = switchTabCallback(mapElement, tabLinkElement);
                             });
@@ -617,11 +744,11 @@ define([
 
              // tab switch --------------------------------------------------------------------------------------------
             $(tabListElement).on('show.bs.tab', 'a', function(e){
-                let mapId = $(e.target).data('map-id');
+                let mapId = $(e.target).data('mapId');
 
                 if(mapId > 0){
                     // save mapId as new "default" (local storage)
-                    MapUtil.storeDefaultMapId(mapId);
+                    MapUtil.storeLocaleCharacterData('defaultMapId', mapId);
                 }else{
                     // add new Tab selected
                     $(document).trigger('pf:menuShowMapSettings', {tab: 'new'});
@@ -631,7 +758,9 @@ define([
 
             $(tabListElement).on('shown.bs.tab', 'a', function(e){
                 // load new map right after tab-change
-                let mapId = $(e.target).data('map-id');
+                let tabLinkElement = $(e.target);
+                let mapId = tabLinkElement.data('mapId');
+                let defaultSystemId = tabLinkElement.data('defaultSystemId');
                 let tabMapData = Util.getCurrentMapData(mapId);
 
                 if(tabMapData !== false){
@@ -645,8 +774,23 @@ define([
                             let mapWrapperElement = mapElement.closest('.mCustomScrollbar');
                             mapWrapperElement.mCustomScrollbar('update');
 
+                            // if there is an already an "active" system -> setCurrentSystemData for that again
+                            let activeSystem = mapElement.find('.' + MapUtil.config.systemActiveClass + ':first');
+                            if(activeSystem.length){
+                                MapUtil.setSystemActive(mapConfig.map, activeSystem);
+                            }else if(defaultSystemId){
+                                // currently no system "active" check if there is a default system set for this mapTab
+                                // -> e.g. from URL link
+                                let systemId = MapUtil.getSystemId(mapConfig.config.id, defaultSystemId);
+                                let system = mapElement.find('#' + systemId);
+                                if(system.length){
+                                    // system exists on map -> make active and show panels
+                                    MapUtil.showSystemInfo(mapConfig.map, system);
+                                }
+                            }
+
                             // change url to unique map URL
-                            if (history.pushState) {
+                            if(history.pushState){
                                 let mapUrl = MapUtil.getMapDeeplinkUrl(mapConfig.config.id);
                                 history.pushState({}, '', mapUrl);
                             }
@@ -658,16 +802,19 @@ define([
             });
 
             $(tabListElement).on('hide.bs.tab', 'a', function(e){
-                let newMapId = $(e.relatedTarget).data('map-id');
-                let oldMapId = $(e.target).data('map-id');
+                let newMapId = $(e.relatedTarget).data('mapId');
+                let oldMapId = $(e.target).data('mapId');
 
                 // skip "add button"
                 if(newMapId > 0){
+                    // delete currentSystemData -> will be set for new map (if there is is an active system)
+                    delete Init.currentSystemData;
+
                     let currentTabContentElement = $('#' + config.mapTabIdPrefix + oldMapId);
 
                     // disable scrollbar for map that will be hidden. "freeze" current state
                     let mapWrapperElement = currentTabContentElement.find('.' + config.mapWrapperClass);
-                    $(mapWrapperElement).mCustomScrollbar('disable', false);
+                    mapWrapperElement.mCustomScrollbar('disable', false);
                 }
 
             });
@@ -690,7 +837,7 @@ define([
          */
         let updateTabExecutor = (resolve, reject) => {
             // set "main" data
-            tabElement.data('map-id', options.id);
+            tabElement.data('mapId', options.id);
 
             // add updated timestamp (not available for "add" tab
             if(Util.getObjVal(options, 'updated.updated')){
@@ -855,21 +1002,21 @@ define([
                 let key = 'maps_list_' + tabBar.attr('data-position');
                 if(dataStore && dataStore[key]){
                     let positionIndex = dataStore[key].indexOf(this.options.id);
-                    if (positionIndex !== -1) {
+                    if(positionIndex !== -1){
                         // first index (0) => is position 1
                         defaultPosition = positionIndex + 1;
                     }
                 }
 
                 // find correct position for new tabs -----------------------------------------------------------------
-                let position = getModulePosition(tabBar, defaultPosition);
+                let position = getModulePosition(tabBar, '.' + config.mapTabClass, defaultPosition);
                 tabListElement.attr('data-position', defaultPosition);
 
                 // insert at correct position -------------------------------------------------------------------------
                 let prevListElement = tabBar.find('li' + '' + ':nth-child(' + position + ')');
-                if (prevListElement.length) {
+                if(prevListElement.length){
                     tabListElement.insertAfter(prevListElement);
-                } else {
+                }else{
                     tabBar.prepend(tabListElement);
                 }
 
@@ -941,18 +1088,18 @@ define([
 
     /**
      * clear all active maps
-     * @param mapModuleElement
+     * @param mapModule
      * @returns {Promise<any>}
      */
-    let clearMapModule = (mapModuleElement) => {
+    let clearMapModule = (mapModule) => {
         let promiseDeleteTab = [];
         let tabMapElement = $('#' + config.mapTabElementId);
 
         if(tabMapElement.length > 0){
-            let tabElements = mapModuleElement.getMapTabElements();
+            let tabElements = mapModule.getMapTabElements();
             for(let i = 0; i < tabElements.length; i++){
                 let tabElement = $(tabElements[i]);
-                let mapId = tabElement.data('map-id');
+                let mapId = tabElement.data('mapId');
                 if(mapId > 0){
                     promiseDeleteTab.push(deleteTab(tabMapElement, mapId));
                 }
@@ -969,6 +1116,23 @@ define([
     let getLastUrlSegment = () => {
         let parts = window.location.pathname.split('/');
         return parts.pop() || parts.pop();
+    };
+
+    /**
+     * extract data from map url
+     * @returns {Array}
+     */
+    let getMapDataFromUrl = () => {
+        let data = [];
+        let lastURLSegment = getLastUrlSegment();
+        if(lastURLSegment.length){
+            try{
+                data = lastURLSegment.split('_').map(part => parseInt(atob(decodeURIComponent(part))) || 0);
+            }catch(e){
+                // data could not be extracted from URL -> ignore
+            }
+        }
+        return data;
     };
 
     /**
@@ -991,21 +1155,19 @@ define([
          */
         let showDefaultTabExecutor = (resolve, reject) => {
             let promiseStore = MapUtil.getLocaleData('character', currentUserData.character.id);
-            promiseStore.then((data) => {
+            promiseStore.then(data => {
                 let activeTabLinkElement = false;
 
                 // check for existing mapId URL identifier ------------------------------------------------------------
-                let lastURLSegment = getLastUrlSegment();
-
-                let defaultMapId = 0;
-                try{
-                    defaultMapId = parseInt(atob(decodeURIComponent(lastURLSegment)));
-                }catch(e){
-                    // defaultMapID could not be extracted from URL -> ignore
-                }
+                let urlData = getMapDataFromUrl();
+                let defaultMapId = urlData[0] || 0;
+                let defaultSystemId = urlData[1] || 0;
 
                 if(defaultMapId){
                     activeTabLinkElement = getActiveTabLinkElement(defaultMapId);
+                    if(defaultSystemId && activeTabLinkElement.length){
+                        activeTabLinkElement.data('defaultSystemId', defaultSystemId);
+                    }
                 }
 
                 // ... else check for existing cached default mapId ---------------------------------------------------
@@ -1035,10 +1197,10 @@ define([
 
     /**
      * load/update map module into element (all maps)
-     * @param mapModuleElement
+     * @param mapModule
      * @returns {Promise<any>}
      */
-    let updateMapModule = (mapModuleElement) => {
+    let updateMapModule = (mapModule) => {
         // performance logging (time measurement)
         let logKeyClientMapData = Init.performanceLogging.keyClientMapData;
         Util.timeStart(logKeyClientMapData);
@@ -1055,7 +1217,7 @@ define([
 
             if(tempMapData.length === 0){
                 // clear all existing maps ----------------------------------------------------------------------------
-                clearMapModule(mapModuleElement)
+                clearMapModule(mapModule)
                     .then(payload => {
                         // no map data available -> show "new map" dialog
                         $(document).trigger('pf:menuShowMapSettings', {tab: 'new'});
@@ -1077,7 +1239,7 @@ define([
                     };
 
                     // tab element already exists
-                    let tabElements = mapModuleElement.getMapTabElements();
+                    let tabElements = mapModule.getMapTabElements();
 
                     // mapIds that are currently active
                     let activeMapIds = [];
@@ -1085,7 +1247,7 @@ define([
                     // check whether a tab/map is still active
                     for(let i = 0; i < tabElements.length; i++){
                         let tabElement = $(tabElements[i]);
-                        let mapId = tabElement.data('map-id');
+                        let mapId = tabElement.data('mapId');
 
                         if(mapId > 0){
                             let tabMapData = Util.getCurrentMapData(mapId);
@@ -1105,7 +1267,7 @@ define([
                     }
 
                     // add new tabs for new maps
-                    for(let data of tempMapData) {
+                    for(let data of tempMapData){
                         if( activeMapIds.indexOf( data.config.id ) === -1 ){
                             // add new map tab
                             promisesAddTab.push(addTab(tabMapElement, data.config, currentUserData).then(tabAddCallback));
@@ -1143,19 +1305,19 @@ define([
                     };
 
                     tabMapElement = getMapTabElement(options, currentUserData);
-                    mapModuleElement.prepend(tabMapElement);
+                    mapModule.prepend(tabMapElement);
 
                     // add new tab for each map
                     for(let j = 0; j < tempMapData.length; j++){
                         let data = tempMapData[j];
-                        promisesAddTab.push(addTab(tabMapElement, data.config, currentUserData)) ;
+                        promisesAddTab.push(addTab(tabMapElement, data.config, currentUserData));
                     }
 
                     // add "add" button
                     let tabAddOptions = {
                         id: 0,
                         type: {
-                            classTab: MapUtil.getInfoForMap( 'standard', 'classTab')
+                            classTab: MapUtil.getInfoForMap('standard', 'classTab')
                         },
                         icon: 'fa-plus',
                         name: 'add',
@@ -1181,19 +1343,18 @@ define([
     /**
      * collect all data (systems/connections) for export/save from each active map in the map module
      * if no change detected -> do not attach map data to return array
+     * @param mapModule
      * @returns {Array}
      */
-    $.fn.getMapModuleDataForUpdate = function(){
+    let getMapModuleDataForUpdate = mapModule => {
         // get all active map elements for module
-        let mapElements = $(this).getMaps();
+        let mapElements = mapModule.getMaps();
 
         let data = [];
         for(let i = 0; i < mapElements.length; i++){
             // get all changed (system / connection) data from this map
             let mapData = $(mapElements[i]).getMapDataFromClient({forceData: false, checkForChange: true});
-
             if(mapData !== false){
-
                 if(
                     mapData.data.systems.length > 0 ||
                     mapData.data.connections.length > 0
@@ -1209,6 +1370,8 @@ define([
     return {
         updateTabData: updateTabData,
         updateMapModule: updateMapModule,
-        updateActiveMapUserData: updateActiveMapUserData
+        updateActiveMapUserData: updateActiveMapUserData,
+        updateSystemModulesData: updateSystemModulesData,
+        getMapModuleDataForUpdate: getMapModuleDataForUpdate
     };
 });

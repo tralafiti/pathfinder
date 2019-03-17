@@ -1,17 +1,18 @@
-<?php
+<?php /** @noinspection PhpUndefinedMethodInspection */
+
 /**
  * Created by PhpStorm.
  * User: Exodus
  * Date: 23.01.2016
  * Time: 17:18
  *
- * Handles access to EVE-Online "ESI API" and "SSO" auth functions
+ * Handles access to EVE-Online "ESI API" and "SSO" oAuth 2.0 functions
  * - Add your API credentials in "environment.ini"
  * - Check "PATHFINDER.API" in "pathfinder.ini" for correct API URLs
- * Hint: \Web::instance()->request automatically caches responses by their response "Cache-Control" header!
  */
 
 namespace Controller\Ccp;
+
 use Controller;
 use Controller\Api as Api;
 use Model;
@@ -23,11 +24,6 @@ class Sso extends Api\User{
      * @var int timeout (seconds) for API calls
      */
     const SSO_TIMEOUT                               = 4;
-
-    /**
-     * @var int expire time (seconds) for an valid "accessToken"
-     */
-    const ACCESS_KEY_EXPIRE_TIME                    = 20 * 60;
 
     // SSO specific session keys
     const SESSION_KEY_SSO                           = 'SESSION.SSO';
@@ -42,16 +38,15 @@ class Sso extends Api\User{
     const ERROR_VERIFY_CHARACTER                    = 'Unable to verify character data. %s';
     const ERROR_LOGIN_FAILED                        = 'Failed authentication due to technical problems: %s';
     const ERROR_CHARACTER_VERIFICATION              = 'Character verification failed by SSP SSO';
+    const ERROR_CHARACTER_DATA                      = 'Failed to load characterData from ESI';
     const ERROR_CHARACTER_FORBIDDEN                 = 'Character "%s" is not authorized to log in. Reason: %s';
     const ERROR_SERVICE_TIMEOUT                     = 'CCP SSO service timeout (%ss). Try again later';
-    const ERROR_COOKIE_LOGIN                        = 'Login from Cookie failed. Please retry by CCP SSO';
-
+    const ERROR_COOKIE_LOGIN                        = 'Login from Cookie failed (data not found). Please retry by CCP SSO';
 
     /**
      * redirect user to CCP SSO page and request authorization
      * -> cf. Controller->getCookieCharacters() ( equivalent cookie based login)
      * @param \Base $f3
-     * @throws \Exception\PathfinderException
      */
     public function requestAdminAuthorization($f3){
         // store browser tabId to be "targeted" after login
@@ -66,14 +61,13 @@ class Sso extends Api\User{
      * -> cf. Controller->getCookieCharacters() ( equivalent cookie based login)
      * @param \Base $f3
      * @throws \Exception
-     * @throws \Exception\PathfinderException
      */
     public function requestAuthorization($f3){
         $params = $f3->get('GET');
 
         if(
             isset($params['characterId']) &&
-            ( $activeCharacter = $this->getCharacter(0) )
+            ( $activeCharacter = $this->getCharacter() )
         ){
             // authentication restricted to a characterId -----------------------------------------------
             // restrict login to this characterId e.g. for character switch on map page
@@ -105,14 +99,12 @@ class Sso extends Api\User{
                         $character->hasUserCharacter() &&
                         ($character->isAuthorized() === 'OK')
                     ){
-                        $loginCheck = $this->loginByCharacter($character);
-
-                        if($loginCheck){
+                        if($this->loginByCharacter($character)){
                             // set "login" cookie
                             $this->setLoginCookie($character);
 
                             // route to "map"
-                            $f3->reroute(['map']);
+                            $f3->reroute(['map', ['*' => '']]);
                         }
                     }
                 }
@@ -132,9 +124,8 @@ class Sso extends Api\User{
      * @param \Base $f3
      * @param array $scopes
      * @param string $rootAlias
-     * @throws \Exception\PathfinderException
      */
-    private function rerouteAuthorization(\Base $f3, $scopes = [], $rootAlias = 'login'){
+    private function rerouteAuthorization(\Base $f3, array $scopes = [], string $rootAlias = 'login'){
         if( !empty( Controller\Controller::getEnvironmentData('CCP_SSO_CLIENT_ID') ) ){
             // used for "state" check between request and callback
             $state = bin2hex( openssl_random_pseudo_bytes(12) );
@@ -148,7 +139,9 @@ class Sso extends Api\User{
                 'state' => $state
             ];
 
-            $ssoAuthUrl = self::getAuthorizationEndpoint() . '?' . http_build_query($urlParams, '', '&', PHP_QUERY_RFC3986 );
+            $ssoAuthUrl = $f3->ssoClient()->getUrl();
+            $ssoAuthUrl .= $f3->ssoClient()->getAuthorizationEndpointURI();
+            $ssoAuthUrl .= '?' . http_build_query($urlParams, '', '&', PHP_QUERY_RFC3986 );
 
             $f3->status(302);
             $f3->reroute($ssoAuthUrl);
@@ -165,7 +158,6 @@ class Sso extends Api\User{
      * -> see requestAuthorization()
      * @param \Base $f3
      * @throws \Exception
-     * @throws \Exception\PathfinderException
      */
     public function callbackAuthorization($f3){
         $getParams = (array)$f3->get('GET');
@@ -193,28 +185,26 @@ class Sso extends Api\User{
 
                 $accessData = $this->getSsoAccessData($getParams['code']);
 
-                if(
-                    isset($accessData->accessToken) &&
-                    isset($accessData->refreshToken)
-                ){
+                if(isset($accessData->accessToken, $accessData->esiAccessTokenExpires, $accessData->refreshToken)){
                     // login succeeded -> get basic character data for current login
                     $verificationCharacterData = $this->verifyCharacterData($accessData->accessToken);
 
-                    if( !is_null($verificationCharacterData)){
+                    if( !empty($verificationCharacterData) ){
 
                         // check if login is restricted to a characterID
 
                         // verification available data. Data is needed for "ownerHash" check
 
                         // get character data from ESI
-                        $characterData = $this->getCharacterData($verificationCharacterData->CharacterID);
+                        $characterData = $this->getCharacterData((int)$verificationCharacterData['characterId']);
 
                         if( isset($characterData->character) ){
                             // add "ownerHash" and SSO tokens
-                            $characterData->character['ownerHash']          = $verificationCharacterData->CharacterOwnerHash;
-                            $characterData->character['crestAccessToken']   = $accessData->accessToken;
-                            $characterData->character['crestRefreshToken']  = $accessData->refreshToken;
-                            $characterData->character['esiScopes']          = Lib\Util::convertScopesString($verificationCharacterData->Scopes);
+                            $characterData->character['ownerHash']              = $verificationCharacterData['characterOwnerHash'];
+                            $characterData->character['esiAccessToken']         = $accessData->accessToken;
+                            $characterData->character['esiAccessTokenExpires']  = $accessData->esiAccessTokenExpires;
+                            $characterData->character['esiRefreshToken']        = $accessData->refreshToken;
+                            $characterData->character['esiScopes']              = $verificationCharacterData['scopes'];
 
                             // add/update static character data
                             $characterModel = $this->updateCharacter($characterData);
@@ -256,9 +246,7 @@ class Sso extends Api\User{
                                     $characterModel = $userCharactersModel->getCharacter();
 
                                     // login by character
-                                    $loginCheck = $this->loginByCharacter($characterModel);
-
-                                    if($loginCheck){
+                                    if($this->loginByCharacter($characterModel)){
                                         // set "login" cookie
                                         $this->setLoginCookie($characterModel);
 
@@ -269,7 +257,7 @@ class Sso extends Api\User{
                                         if($rootAlias == 'admin'){
                                             $f3->reroute([$rootAlias, ['*' => '']]);
                                         }else{
-                                            $f3->reroute(['map']);
+                                            $f3->reroute(['map', ['*' => '']]);
                                         }
                                     }else{
                                         $f3->set(self::SESSION_KEY_SSO_ERROR, sprintf(self::ERROR_LOGIN_FAILED, $characterModel->name));
@@ -281,6 +269,9 @@ class Sso extends Api\User{
                                     );
                                 }
                             }
+                        }else{
+                            // failed to load characterData from API
+                            $f3->set(self::SESSION_KEY_SSO_ERROR, self::ERROR_CHARACTER_DATA);
                         }
                     }else{
                         // failed to verify character by CCP SSO
@@ -303,11 +294,10 @@ class Sso extends Api\User{
      * login by cookie name
      * @param \Base $f3
      * @throws \Exception
-     * @throws \Exception\PathfinderException
      */
     public function login(\Base $f3){
         $data = (array)$f3->get('GET');
-        $cookieName = empty($data['cookie']) ? '' : $data['cookie'];
+        $cookieName = (string)$data['cookie'];
         $character = null;
 
         if( !empty($cookieName) ){
@@ -320,17 +310,19 @@ class Sso extends Api\User{
             }
         }
 
-        if( is_object($character)){
+        if(is_object($character)){
             // login by character
-            $loginCheck = $this->loginByCharacter($character);
-            if($loginCheck){
+            if($this->loginByCharacter($character)){
                 // route to "map"
-                $f3->reroute(['map']);
+                $f3->reroute(['map', ['*' => '']]);
+            }else{
+                $f3->set(self::SESSION_KEY_SSO_ERROR, sprintf(self::ERROR_LOGIN_FAILED, $character->name));
             }
+        }else{
+            $f3->set(self::SESSION_KEY_SSO_ERROR, self::ERROR_COOKIE_LOGIN);
         }
 
         // on error -> route back to login form
-        $f3->set(self::SESSION_KEY_SSO_ERROR, self::ERROR_COOKIE_LOGIN);
         $f3->reroute(['login']);
     }
 
@@ -341,9 +333,8 @@ class Sso extends Api\User{
      * -> else try to refresh auth and get fresh "access_token"
      * @param bool $authCode
      * @return null|\stdClass
-     * @throws \Exception\PathfinderException
      */
-    public function getSsoAccessData($authCode){
+    protected function getSsoAccessData($authCode){
         $accessData = null;
 
         if( !empty($authCode) ){
@@ -359,11 +350,10 @@ class Sso extends Api\User{
 
     /**
      * verify authorization code, and get an "access_token" data
-     * @param $authCode
+     * @param string $authCode
      * @return \stdClass
-     * @throws \Exception\PathfinderException
      */
-    protected function verifyAuthorizationCode($authCode){
+    protected function verifyAuthorizationCode(string $authCode){
         $requestParams = [
             'grant_type' => 'authorization_code',
             'code' => $authCode
@@ -375,11 +365,10 @@ class Sso extends Api\User{
     /**
      * get new "access_token" by an existing "refresh_token"
      * -> if "access_token" is expired, this function gets a fresh one
-     * @param $refreshToken
+     * @param string $refreshToken
      * @return \stdClass
-     * @throws \Exception\PathfinderException
      */
-    public function refreshAccessToken($refreshToken){
+    public function refreshAccessToken(string $refreshToken){
         $requestParams = [
             'grant_type' => 'refresh_token',
             'refresh_token' => $refreshToken
@@ -392,62 +381,42 @@ class Sso extends Api\User{
      * request an "access_token" AND "refresh_token" data
      * -> this can either be done by sending a valid "authorization code"
      * OR by providing a valid "refresh_token"
-     * @param $requestParams
+     * @param array $requestParams
      * @return \stdClass
-     * @throws \Exception\PathfinderException
      */
-    protected function requestAccessData($requestParams){
-        $verifyAuthCodeUrl = self::getVerifyAuthorizationCodeEndpoint();
-        $verifyAuthCodeUrlParts = parse_url($verifyAuthCodeUrl);
-
+    protected function requestAccessData(array $requestParams) : \stdClass {
         $accessData = (object) [];
         $accessData->accessToken = null;
         $accessData->refreshToken = null;
+        $accessData->esiAccessTokenExpires = 0;
 
-        if($verifyAuthCodeUrlParts){
-            $contentType = 'application/x-www-form-urlencoded';
-            $requestOptions = [
-                'timeout' => self::SSO_TIMEOUT,
-                'method' => 'POST',
-                'user_agent' => $this->getUserAgent(),
-                'header' => [
-                    'Authorization: Basic ' . $this->getAuthorizationHeader(),
-                    'Content-Type: ' . $contentType,
-                    'Host: ' . $verifyAuthCodeUrlParts['host']
-                ]
-            ];
+        $authCodeRequestData = $this->getF3()->ssoClient()->getAccessData($this->getAuthorizationData(), $requestParams);
 
-            // content (parameters to send with)
-            $requestOptions['content'] = http_build_query($requestParams);
+        if( !empty($authCodeRequestData) ){
+            if( !empty($authCodeRequestData['accessToken']) ){
+                // accessToken is required for endpoints that require Auth
+                $accessData->accessToken =  $authCodeRequestData['accessToken'];
+            }
 
-            $apiResponse = Lib\Web::instance()->request($verifyAuthCodeUrl, $requestOptions);
+            if( !empty($authCodeRequestData['expiresIn']) ){
+                // expire time for accessToken
+                try{
+                    $timezone = $this->getF3()->get('getTimeZone')();
+                    $accessTokenExpires = new \DateTime('now', $timezone);
+                    $accessTokenExpires->add(new \DateInterval('PT' . (int)$authCodeRequestData['expiresIn'] . 'S'));
 
-            if($apiResponse['body']){
-                $authCodeRequestData = json_decode($apiResponse['body'], true);
-
-                if( !empty($authCodeRequestData) ){
-                    if( isset($authCodeRequestData['access_token']) ){
-                        // this token is required for endpoints that require Auth
-                        $accessData->accessToken =  $authCodeRequestData['access_token'];
-                    }
-
-                    if(isset($authCodeRequestData['refresh_token'])){
-                        // this token is used to refresh/get a new access_token when expires
-                        $accessData->refreshToken =  $authCodeRequestData['refresh_token'];
-                    }
+                    $accessData->esiAccessTokenExpires = $accessTokenExpires->format('Y-m-d H:i:s');
+                }catch(\Exception $e){
+                    $this->getF3()->error(500, $e->getMessage(), $e->getTrace());
                 }
-            }else{
-                self::getSSOLogger()->write(
-                    sprintf(
-                        self::ERROR_ACCESS_TOKEN,
-                        print_r($requestParams, true)
-                    )
-                );
+            }
+
+            if( !empty($authCodeRequestData['refreshToken']) ){
+                // this token is used to refresh/get a new access_token when expires
+                $accessData->refreshToken =  $authCodeRequestData['refreshToken'];
             }
         }else{
-            self::getSSOLogger()->write(
-                sprintf(self::ERROR_CCP_SSO_URL, __METHOD__)
-            );
+            self::getSSOLogger()->write(sprintf(self::ERROR_ACCESS_TOKEN, print_r($requestParams, true)));
         }
 
         return $accessData;
@@ -457,35 +426,17 @@ class Sso extends Api\User{
      * verify character data by "access_token"
      * -> get some basic information (like character id)
      * -> if more character information is required, use ESI "characters" endpoints request instead
-     * @param $accessToken
-     * @return mixed|null
-     * @throws \Exception\PathfinderException
+     * @param string $accessToken
+     * @return array
      */
-    public function verifyCharacterData($accessToken){
-        $verifyUserUrl = self::getVerifyUserEndpoint();
-        $verifyUrlParts = parse_url($verifyUserUrl);
-        $characterData = null;
+    public function verifyCharacterData(string $accessToken) : array {
+        $characterData = $this->getF3()->ssoClient()->getVerifyCharacterData($accessToken);
 
-        if($verifyUrlParts){
-            $requestOptions = [
-                'timeout' => self::SSO_TIMEOUT,
-                'method' => 'GET',
-                'user_agent' => $this->getUserAgent(),
-                'header' => [
-                    'Authorization: Bearer ' . $accessToken,
-                    'Host: ' . $verifyUrlParts['host']
-                ]
-            ];
-
-            $apiResponse = Lib\Web::instance()->request($verifyUserUrl, $requestOptions);
-
-            if($apiResponse['body']){
-                $characterData = json_decode($apiResponse['body']);
-            }else{
-                self::getSSOLogger()->write(sprintf(self::ERROR_VERIFY_CHARACTER, __METHOD__));
-            }
+        if( !empty($characterData) ){
+            // convert string with scopes to array
+            $characterData['scopes'] = Lib\Util::convertScopesString($characterData['scopes']);
         }else{
-            self::getSSOLogger()->write(sprintf(self::ERROR_CCP_SSO_URL, __METHOD__));
+            self::getSSOLogger()->write(sprintf(self::ERROR_VERIFY_CHARACTER, __METHOD__));
         }
 
         return $characterData;
@@ -494,67 +445,44 @@ class Sso extends Api\User{
     /**
      * get character data
      * @param int $characterId
-     * @return object
+     * @return \stdClass
      * @throws \Exception
      */
-    public function getCharacterData($characterId){
+    public function getCharacterData(int $characterId) : \stdClass{
         $characterData = (object) [];
 
-        $characterDataBasic =  $this->getF3()->ccpClient->getCharacterData($characterId);
+        if($characterId){
+            $characterDataBasic =  $this->getF3()->ccpClient()->getCharacterData($characterId);
 
-        if( !empty($characterDataBasic) ){
-            // remove some "unwanted" data -> not relevant for Pathfinder
-            $characterData->character = array_filter($characterDataBasic, function($key){
-                return in_array($key, ['id', 'name', 'securityStatus']);
-            }, ARRAY_FILTER_USE_KEY);
+            if( !empty($characterDataBasic) ){
+                // remove some "unwanted" data -> not relevant for Pathfinder
+                $characterData->character = array_filter($characterDataBasic, function($key){
+                    return in_array($key, ['id', 'name', 'securityStatus']);
+                }, ARRAY_FILTER_USE_KEY);
 
-            $characterData->corporation = null;
-            $characterData->alliance = null;
+                $characterData->corporation = null;
+                $characterData->alliance = null;
 
-            if(isset($characterDataBasic['corporation'])){
-                $corporationId = (int)$characterDataBasic['corporation']['id'];
-
-                /**
-                 * @var Model\CorporationModel $corporationModel
-                 */
-                $corporationModel = Model\BasicModel::getNew('CorporationModel');
-                $corporationModel->getById($corporationId, 0);
-
-                if($corporationModel->dry()){
-                    // request corporation data
-                    $corporationData = $this->getF3()->ccpClient->getCorporationData($corporationId);
-
-                    if( !empty($corporationData) ){
-                        // check for NPC corporation
-                        $corporationData['isNPC'] = $this->getF3()->ccpClient->isNpcCorporation($corporationId);
-
-                        $corporationModel->copyfrom($corporationData, ['id', 'name', 'isNPC']);
-                        $characterData->corporation = $corporationModel->save();
+                if($corporationId = (int)$characterDataBasic['corporation']['id']){
+                    /**
+                     * @var Model\CorporationModel $corporation
+                     */
+                    $corporation = Model\BasicModel::getNew('CorporationModel');
+                    $corporation->getById($corporationId, 0);
+                    if( !$corporation->dry() ){
+                        $characterData->corporation = $corporation;
                     }
-                }else{
-                    $characterData->corporation = $corporationModel;
                 }
-            }
 
-            if(isset($characterDataBasic['alliance'])){
-                $allianceId = (int)$characterDataBasic['alliance']['id'];
-
-                /**
-                 * @var Model\AllianceModel $allianceModel
-                 */
-                $allianceModel = Model\BasicModel::getNew('AllianceModel');
-                $allianceModel->getById($allianceId, 0);
-
-                if($allianceModel->dry()){
-                    // request alliance data
-                    $allianceData = $this->getF3()->ccpClient->getAllianceData($allianceId);
-
-                    if( !empty($allianceData) ){
-                        $allianceModel->copyfrom($allianceData, ['id', 'name']);
-                        $characterData->alliance = $allianceModel->save();
+                if($allianceId = (int)$characterDataBasic['alliance']['id']){
+                    /**
+                     * @var Model\AllianceModel $allianceModel
+                     */
+                    $alliance = Model\BasicModel::getNew('AllianceModel');
+                    $alliance->getById($allianceId, 0);
+                    if( !$alliance->dry() ){
+                        $characterData->alliance = $alliance;
                     }
-                }else{
-                    $characterData->alliance = $allianceModel;
                 }
             }
         }
@@ -564,50 +492,50 @@ class Sso extends Api\User{
 
     /**
      * update character
-     * @param $characterData
-     * @return \Model\CharacterModel
+     * @param \stdClass $characterData
+     * @return \Model\CharacterModel|null
      * @throws \Exception
      */
-    protected function updateCharacter($characterData){
-        $characterModel = null;
+    protected function updateCharacter(\stdClass $characterData){
+        $character = null;
 
         if( !empty($characterData->character) ){
-
             /**
-             * @var Model\CharacterModel $characterModel
+             * @var Model\CharacterModel $character
              */
-            $characterModel = Model\BasicModel::getNew('CharacterModel');
-            $characterModel->getById((int)$characterData->character['id'], 0);
-            $characterModel->copyfrom($characterData->character, [
-                'id', 'name', 'ownerHash', 'crestAccessToken', 'crestRefreshToken', 'esiScopes', 'securityStatus'
+            $character = Model\BasicModel::getNew('CharacterModel');
+            $character->getById((int)$characterData->character['id'], 0);
+            $character->copyfrom($characterData->character, [
+                'id', 'name', 'ownerHash', 'esiAccessToken', 'esiAccessTokenExpires', 'esiRefreshToken', 'esiScopes', 'securityStatus'
             ]);
-            $characterModel->corporationId = $characterData->corporation;
-            $characterModel->allianceId = $characterData->alliance;
-            $characterModel = $characterModel->save();
+
+            $character->corporationId = $characterData->corporation;
+            $character->allianceId = $characterData->alliance;
+            $character = $character->save();
         }
 
-        return $characterModel;
+        return $character;
     }
 
     /**
-     * get "Authorization:" Header data
+     * get data for HTTP "Authorization:" Header
      * -> This header is required for any Auth-required endpoints!
-     * @return string
+     * @return array
      */
-    protected function getAuthorizationHeader(){
-        return base64_encode(
-            Controller\Controller::getEnvironmentData('CCP_SSO_CLIENT_ID') . ':'
-            . Controller\Controller::getEnvironmentData('CCP_SSO_SECRET_KEY')
-        );
+    protected function getAuthorizationData() : array {
+        return [
+            Controller\Controller::getEnvironmentData('CCP_SSO_CLIENT_ID'),
+            Controller\Controller::getEnvironmentData('CCP_SSO_SECRET_KEY'),
+            'basic'
+        ];
     }
 
     /**
      * get CCP SSO url from configuration file
      * -> throw error if url is broken/missing
      * @return string
-     * @throws \Exception\PathfinderException
      */
-    static function getSsoUrlRoot(){
+    static function getSsoUrlRoot() : string {
         $url = '';
         if( \Audit::instance()->url(self::getEnvironmentData('CCP_SSO_URL')) ){
             $url = self::getEnvironmentData('CCP_SSO_URL');
@@ -620,24 +548,11 @@ class Sso extends Api\User{
         return $url;
     }
 
-    static function getAuthorizationEndpoint(){
-        return self::getSsoUrlRoot() . '/oauth/authorize';
-    }
-
-    static function getVerifyAuthorizationCodeEndpoint(){
-        return self::getSsoUrlRoot() . '/oauth/token';
-    }
-
-    static function getVerifyUserEndpoint(){
-        return self::getSsoUrlRoot() . '/oauth/verify';
-    }
-
     /**
      * get logger for SSO logging
      * @return \Log
-     * @throws \Exception\PathfinderException
      */
-    static function getSSOLogger(){
+    static function getSSOLogger() : \Log {
         return parent::getLogger('SSO');
     }
 }

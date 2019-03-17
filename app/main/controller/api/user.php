@@ -41,24 +41,24 @@ class User extends Controller\Controller{
 
     /**
      * login a valid character
-     * @param Model\CharacterModel $characterModel
+     * @param Model\CharacterModel $character
      * @return bool
      * @throws Exception
      */
-    protected function loginByCharacter(Model\CharacterModel &$characterModel){
+    protected function loginByCharacter(Model\CharacterModel &$character) : bool {
         $login = false;
 
-        if($user = $characterModel->getUser()){
+        if($user = $character->getUser()){
             // check if character belongs to current user
             // -> If there is already a logged in user! (e.g. multi character use)
             $currentUser = $this->getUser();
+            $timezone = $this->getF3()->get('getTimeZone')();
 
             $sessionCharacters = [
                 [
-                    'ID' => $characterModel->_id,
-                    'NAME' => $characterModel->name,
-                    'TIME' => (new \DateTime())->getTimestamp(),
-                    'UPDATE_RETRY' => 0
+                    'ID' => $character->_id,
+                    'NAME' => $character->name,
+                    'TIME' => (new \DateTime('now', $timezone))->getTimestamp()
                 ]
             ];
 
@@ -74,29 +74,29 @@ class User extends Controller\Controller{
                 ]);
             }else{
                 // user has NOT changed -----------------------------------------------------------
-                $sessionCharacters = $characterModel::mergeSessionCharacterData($sessionCharacters);
+                $sessionCharacters = $character::mergeSessionCharacterData($sessionCharacters);
             }
 
             $this->getF3()->set(self::SESSION_KEY_CHARACTERS, $sessionCharacters);
 
             // save user login information --------------------------------------------------------
-            $characterModel->roleId = $characterModel->requestRole();
-            $characterModel->touch('lastLogin');
-            $characterModel->save();
+            $character->roleId = $character->requestRole();
+            $character->touch('lastLogin');
+            $character->save();
 
             // write login log --------------------------------------------------------------------
-            self::getLogger('LOGIN')->write(
+            self::getLogger('CHARACTER_LOGIN')->write(
                 sprintf(self::LOG_LOGGED_IN,
                     $user->_id,
                     $user->name,
-                    $characterModel->_id,
-                    $characterModel->name
+                    $character->_id,
+                    $character->name
                 )
             );
 
             // set temp character data ------------------------------------------------------------
             // -> pass character data over for next http request (reroute())
-            $this->setTempCharacterData($characterModel->_id);
+            $this->setTempCharacterData($character->_id);
 
             $login = true;
         }
@@ -109,35 +109,33 @@ class User extends Controller\Controller{
      * -> return character data (if valid)
      * @param \Base $f3
      * @throws Exception
-     * @throws Exception\PathfinderException
      */
     public function getCookieCharacter(\Base $f3){
         $data = $f3->get('POST');
+        $cookieName = (string)$data['cookie'];
 
         $return = (object) [];
         $return->error = [];
 
-        if( !empty($data['cookie']) ){
-            if( !empty($cookieData = $this->getCookieByName($data['cookie']) )){
-                // cookie data is valid -> validate data against DB (security check!)
-                // -> add characters WITHOUT permission to log in too!
-                if( !empty($characters = $this->getCookieCharacters(array_slice($cookieData, 0, 1, true), false)) ){
-                    // character is valid and allowed to login
-                    $return->character = reset($characters)->getData();
-                    // get Session status for character
-                    if($activeCharacter = $this->getCharacter()){
-                        if($activeUser = $activeCharacter->getUser()){
-                            if($sessionCharacterData = $activeUser->findSessionCharacterData($return->character->id)){
-                                $return->character->hasActiveSession = true;
-                            }
+        if( !empty($cookieData = $this->getCookieByName($cookieName) )){
+            // cookie data is valid -> validate data against DB (security check!)
+            // -> add characters WITHOUT permission to log in too!
+            if( !empty($characters = $this->getCookieCharacters(array_slice($cookieData, 0, 1, true), false)) ){
+                // character is valid and allowed to login
+                $return->character = reset($characters)->getData();
+                // get Session status for character
+                if($activeCharacter = $this->getCharacter()){
+                    if($activeUser = $activeCharacter->getUser()){
+                        if($sessionCharacterData = $activeUser->findSessionCharacterData($return->character->id)){
+                            $return->character->hasActiveSession = true;
                         }
                     }
-                }else{
-                    $characterError = (object) [];
-                    $characterError->type = 'warning';
-                    $characterError->message = 'This can happen through "invalid cookies(SSO)", "login restrictions", "ESI problems".';
-                    $return->error[] = $characterError;
                 }
+            }else{
+                $characterError = (object) [];
+                $characterError->type = 'warning';
+                $characterError->message = 'This can happen through "invalid cookies(SSO)", "login restrictions", "ESI problems".';
+                $return->error[] = $characterError;
             }
         }
 
@@ -201,15 +199,10 @@ class User extends Controller\Controller{
     /**
      * log the current user out + clear character system log data
      * @param \Base $f3
-     * @throws Exception
      * @throws \ZMQSocketException
      */
     public function logout(\Base $f3){
-        $this->logoutCharacter(false, true, true, true);
-
-        $return = (object) [];
-        $return->reroute = rtrim(self::getEnvironmentData('URL'), '/') . $f3->alias('login');
-        echo json_encode($return);
+        $this->logoutCharacter($f3, false, true, true, true);
     }
 
     /**
@@ -227,7 +220,7 @@ class User extends Controller\Controller{
         if( $targetId = (int)$data['targetId']){
             $activeCharacter = $this->getCharacter();
 
-            $response =  $f3->ccpClient->openWindow($targetId, $activeCharacter->getAccessToken());
+            $response =  $f3->ccpClient()->openWindow($targetId, $activeCharacter->getAccessToken());
 
             if(empty($response)){
                 $return->targetId = $targetId;
@@ -266,7 +259,7 @@ class User extends Controller\Controller{
             $formData = $data['formData'];
 
             try{
-                if($activeCharacter = $this->getCharacter(0)){
+                if($activeCharacter = $this->getCharacter()){
                     $user = $activeCharacter->getUser();
 
                     // captcha is send -> check captcha -------------------------------------------
@@ -335,7 +328,7 @@ class User extends Controller\Controller{
 
                     // character config -----------------------------------------------------------
                     if(isset($formData['character'])){
-                        $activeCharacter->logLocation = (int)$formData['logLocation'];
+                        $activeCharacter->copyfrom($formData, ['logLocation', 'selectLocation']);
 
                         $activeCharacter->save();
                     }
@@ -345,17 +338,9 @@ class User extends Controller\Controller{
                 }
 
             }catch(Exception\ValidationException $e){
-                $validationError = (object) [];
-                $validationError->type = 'error';
-                $validationError->field = $e->getField();
-                $validationError->message = $e->getMessage();
-                $return->error[] = $validationError;
+                $return->error[] = $e->getError();
             }catch(Exception\RegistrationException $e){
-                $registrationError = (object) [];
-                $registrationError->type = 'error';
-                $registrationError->field = $e->getField();
-                $registrationError->message = $e->getMessage();
-                $return->error[] = $registrationError;
+                $return->error[] = $e->getError();
             }
 
             // return new/updated user data
@@ -385,7 +370,7 @@ class User extends Controller\Controller{
             !empty($data['captcha']) &&
             $data['captcha'] === $captcha
         ){
-            $activeCharacter = $this->getCharacter(0);
+            $activeCharacter = $this->getCharacter();
             $user = $activeCharacter->getUser();
 
             if($user){
@@ -394,10 +379,8 @@ class User extends Controller\Controller{
                     sprintf(self::LOG_DELETE_ACCOUNT, $user->id, $user->name)
                 );
 
-                $this->logoutCharacter(true, true, true, true);
+                $this->logoutCharacter($f3, true, true, true, true);
                 $user->erase();
-
-                $return->reroute = rtrim(self::getEnvironmentData('URL'), '/') . $f3->alias('login');
             }
         }else{
             // captcha not valid -> return error

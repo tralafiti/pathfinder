@@ -8,7 +8,7 @@ define([
     'app/util',
     'app/render',
     'bootbox'
-], function($, Init, Util, Render, bootbox) {
+], function($, Init, Util, Render, bootbox){
     'use strict';
 
     let config = {
@@ -42,7 +42,7 @@ define([
             return false;
         }
 
-        requirejs(['text!templates/dialog/settings.html', 'mustache'], function(template, Mustache) {
+        requirejs(['text!templates/dialog/settings.html', 'mustache'], function(template, Mustache){
 
             let data = {
                 id: config.settingsDialogId,
@@ -55,6 +55,7 @@ define([
                 formErrorContainerClass: Util.config.formErrorContainerClass,
                 ccpImageServer: Init.url.ccpImageServer,
                 roleLabel: Util.getLabelByRole(Util.getObjVal(Util.getCurrentUserData(), 'character.role')).prop('outerHTML'),
+                characterAutoLocationSelectEnabled: Boolean(Util.getObjVal(Init, 'character.autoLocationSelect'))
             };
 
             let content = Mustache.render(template, data);
@@ -62,6 +63,7 @@ define([
             let accountSettingsDialog = bootbox.dialog({
                 title: 'Account settings',
                 message: content,
+                show: false,
                 buttons: {
                     close: {
                         label: 'cancel',
@@ -70,7 +72,7 @@ define([
                     success: {
                         label: '<i class="fas fa-check fa-fw"></i>&nbsp;save',
                         className: 'btn-success',
-                        callback: function() {
+                        callback: function(){
 
                             // get the current active form
                             let form = $('#' + config.settingsDialogId).find('form').filter(':visible');
@@ -132,7 +134,7 @@ define([
                                         accountSettingsDialog.modal('hide');
                                     }
 
-                                }).fail(function( jqXHR, status, error) {
+                                }).fail(function(jqXHR, status, error){
                                     accountSettingsDialog.find('.modal-content').hideLoadingAnimation();
 
                                     let reason = status + ' ' + error;
@@ -170,12 +172,7 @@ define([
                 }
             });
 
-            // after modal is shown =======================================================================
-            accountSettingsDialog.on('shown.bs.modal', function(e) {
-
-                let dialogElement = $(this);
-                let form = dialogElement.find('form');
-
+            accountSettingsDialog.on('show.bs.modal', function(e){
                 // request captcha image and show
                 let captchaImageWrapperContainer = $('#' + config.captchaImageWrapperId);
                 captchaImageWrapperContainer.showCaptchaImage(config.captchaKeyUpdateAccount);
@@ -184,13 +181,20 @@ define([
                 captchaImageWrapperContainer.find('i').on('click', function(){
                     captchaImageWrapperContainer.showCaptchaImage(config.captchaKeyUpdateAccount);
                 });
+            });
 
+            // after modal is shown =======================================================================
+            accountSettingsDialog.on('shown.bs.modal', function(e){
+                let dialogElement = $(this);
+                let form = dialogElement.find('form');
 
-                // init dialog tooltips
                 dialogElement.initTooltips();
 
                 form.initFormValidation();
             });
+
+            // show dialog
+            accountSettingsDialog.modal('show');
 
             // events for tab change
             accountSettingsDialog.find('.navbar a').on('shown.bs.tab', function(e){

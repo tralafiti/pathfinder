@@ -9,8 +9,9 @@
 namespace lib;
 
 
-use controller\LogController;
-use Exception;
+use lib\api\CcpClient;
+use lib\api\GitHubClient;
+use lib\api\SsoClient;
 
 class Config extends \Prefab {
 
@@ -21,8 +22,41 @@ class Config extends \Prefab {
     const CACHE_KEY_SOCKET_VALID                    = 'CACHED_SOCKET_VALID';
     const CACHE_TTL_SOCKET_VALID                    = 60;
 
-    const ERROR_CONF_PATHFINDER                     = 'Config value missing in pathfinder.ini file [%s]';
-    const ERROR_CLASS_NOT_EXISTS_COMPOSER           = 'Class "%s" not found. -> Check installed Composer packages';
+    // ================================================================================================================
+    // Redis
+    // ================================================================================================================
+
+    /**
+     * Redis connect timeout (seconds)
+     */
+    const REDIS_OPT_TIMEOUT                         = 2;
+
+    /**
+     * Redis read timeout (seconds)
+     */
+    const REDIS_OPT_READ_TIMEOUT                    = 10;
+
+    /**
+     * redis retry interval (milliseconds)
+     */
+    const REDIS_OPT_RETRY_INTERVAL                  = 200;
+
+    // ================================================================================================================
+    // EVE downtime
+    // ================================================================================================================
+
+    /**
+     * SSO downtime length (estimation), minutes
+     */
+    const DOWNTIME_LENGTH                           = 8;
+
+    /**
+     * SSO downtime buffer length extends downtime length, minutes
+     */
+    const DOWNTIME_BUFFER                           = 1;
+
+    const ERROR_CLASS_NOT_EXISTS_COMPOSER           = 'Class "%s" not found. → Check installed Composer packages';
+    const ERROR_METHOD_NOT_EXISTS_COMPOSER          = 'Method "%s()" not found in class "%s". → Check installed Composer packages';
 
 
     /**
@@ -30,6 +64,9 @@ class Config extends \Prefab {
      * -> use "," as delimiter in config files/data
      */
     const ARRAY_KEYS                                = ['CCP_ESI_SCOPES', 'CCP_ESI_SCOPES_ADMIN'];
+
+    const
+        HTTP_422='Unprocessable Entity';
 
     /**
      * all environment data
@@ -48,10 +85,21 @@ class Config extends \Prefab {
         // -> overwrites default configuration
         $this->setHiveVariables($f3);
 
-        // set global function for current DateTimeZone()
-        $f3->set('getTimeZone', function() use ($f3){
+        // set global getter for \DateTimeZone
+        $f3->set('getTimeZone', function() use ($f3) : \DateTimeZone {
             return new \DateTimeZone( $f3->get('TZ') );
         });
+
+        // set global getter for new \DateTime
+        $f3->set('getDateTime', function(string $time = 'now', ?\DateTimeZone $timeZone = null) use ($f3) : \DateTime {
+            $timeZone = $timeZone ? : $f3->get('getTimeZone')();
+           return new \DateTime($time, $timeZone);
+        });
+
+        // lazy init Web Api clients
+        $f3->set(SsoClient::CLIENT_NAME, SsoClient::instance());
+        $f3->set(CcpClient::CLIENT_NAME, CcpClient::instance());
+        $f3->set(GitHubClient::CLIENT_NAME, GitHubClient::instance());
     }
 
     /**
@@ -209,7 +257,6 @@ class Config extends \Prefab {
     /**
      * get SMTP config values
      * @return \stdClass
-     * @throws Exception\PathfinderException
      */
     static function getSMTPConfig(): \stdClass{
         $config             = new \stdClass();
@@ -254,7 +301,6 @@ class Config extends \Prefab {
      * get email for notifications by hive key
      * @param $key
      * @return mixed
-     * @throws Exception\PathfinderException
      */
     static function getNotificationMail($key){
         return self::getPathfinderData('notification' . ($key ? '.' . $key : ''));
@@ -265,11 +311,10 @@ class Config extends \Prefab {
      * -> read from pathfinder.ini
      * @param string $mapType
      * @return mixed
-     * @throws Exception\PathfinderException
      */
     static function getMapsDefaultConfig($mapType = ''){
         if( $mapConfig = self::getPathfinderData('map' . ($mapType ? '.' . $mapType : '')) ){
-            $mapConfig = Util::arrayChangeKeyCaseRecursive( $mapConfig );
+            $mapConfig = Util::arrayChangeKeyCaseRecursive($mapConfig);
         }
 
         return $mapConfig;
@@ -374,27 +419,101 @@ class Config extends \Prefab {
         ){
             $uri = 'tcp://' . $ip . ':' . $port;
         }
-
         return $uri;
     }
 
     /**
      * @param string $key
-     * @return mixed
-     * @throws Exception\PathfinderException
+     * @return null|mixed
      */
     static function getPathfinderData($key = ''){
         $hiveKey = self::HIVE_KEY_PATHFINDER . ($key ? '.' . strtoupper($key) : '');
+        if( !\Base::instance()->exists($hiveKey, $data) ){
+            $data = null;
+        }
+        return $data;
+    }
 
-        try{
-            if( !\Base::instance()->exists($hiveKey, $data) ){
-                throw new Exception\PathfinderException(sprintf(self::ERROR_CONF_PATHFINDER, $hiveKey));
+    /**
+     * get HTTP status message by HTTP return code
+     * -> either from F3 or from self::Config constants
+     * @param int $code
+     * @return string
+     */
+    static function getHttpStatusByCode(int $code) : string {
+        if(empty($status = @constant('Base::HTTP_' .  $code))){
+            $status = @constant('self::HTTP_' .  $code);
+        }
+        return $status;
+    }
+
+    /**
+     * parse [D]ata [S]ource [N]ame string from *.ini into $conf parts
+     * -> $dsn = redis=localhost:6379:2
+     *    $conf = ['type' => 'redis', 'host' => 'localhost', 'port' => 6379, 'db' => 2]
+     * -> some $conf values might be NULL if not found in $dsn!
+     * -> some missing values become defaults
+     * @param string $dsn
+     * @param array|null $conf
+     * @return bool
+     */
+    static function parseDSN(string $dsn, ?array &$conf = []) : bool {
+        // reset reference
+        if($matches = (bool)preg_match('/^(\w+)\h*=\h*(.+)/', strtolower(trim($dsn)), $parts)){
+            $conf['type'] = $parts[1];
+            if($conf['type'] == 'redis'){
+                list($conf['host'], $conf['port'], $conf['db']) = explode(':', $parts[2]) + [1 => 6379, 2 => null];
+            }elseif($conf['type'] == 'folder'){
+                $conf['folder'] = $parts[2];
             }
-        }catch (Exception\PathfinderException $e){
-            LogController::getLogger('ERROR')->write($e->getMessage());
+            // int cast numeric values
+            $conf = array_map(function($val){
+                return is_numeric($val) ? intval($val) : $val;
+            }, $conf);
+        }
+        return $matches;
+    }
+
+    /**
+     * check if a given DateTime() is within downTime range: downtime + 10m
+     * -> can be used for prevent logging errors during downTime
+     * @param \DateTime|null $dateCheck
+     * @return bool
+     */
+    static function inDownTimeRange(\DateTime $dateCheck = null) : bool {
+        $inRange = false;
+        // default daily downtime 00:00am
+        $downTimeParts = [0, 0];
+        if( !empty($downTime = (string)self::getEnvironmentData('CCP_SSO_DOWNTIME')) ){
+            $parts = array_map('intval', explode(':', $downTime));
+            if(count($parts) === 2){
+                // well formatted DOWNTIME found in config files
+                $downTimeParts = $parts;
+            }
         }
 
-        return $data;
+        try{
+            // downTime Range is 10m
+            $downtimeLength = self::DOWNTIME_LENGTH + (2 * self::DOWNTIME_BUFFER);
+            $timezone = \Base::instance()->get('getTimeZone')();
+
+            // if not set -> use current time
+            $dateCheck = is_null($dateCheck) ? new \DateTime('now', $timezone) : $dateCheck;
+            $dateDowntimeStart = new \DateTime('now', $timezone);
+            $dateDowntimeStart->setTime($downTimeParts[0],$downTimeParts[1]);
+            $dateDowntimeStart->sub(new \DateInterval('PT' . self::DOWNTIME_BUFFER . 'M'));
+
+            $dateDowntimeEnd = clone $dateDowntimeStart;
+            $dateDowntimeEnd->add(new \DateInterval('PT' . $downtimeLength . 'M'));
+
+            $dateRange = new DateRange($dateDowntimeStart, $dateDowntimeEnd);
+            $inRange = $dateRange->inRange($dateCheck);
+        }catch(\Exception $e){
+            $f3 = \Base::instance();
+            $f3->error(500, $e->getMessage(), $e->getTrace());
+        }
+
+        return $inRange;
     }
 
 }

@@ -20,24 +20,15 @@ class AccessController extends Controller {
      * @param $params
      * @return bool
      * @throws \Exception
-     * @throws \Exception\PathfinderException
      * @throws \ZMQSocketException
      */
     function beforeroute(\Base $f3, $params): bool {
         if($return = parent::beforeroute($f3, $params)){
             // Any route/endpoint of a child class of this one,
             // requires a valid logged in user!
-            if( !$this->isLoggedIn($f3) ){
+            if($this->isLoggedIn($f3) !== 'OK'){
                 // no character found or login timer expired
-                $this->logoutCharacter();
-
-                if($f3->get('AJAX')){
-                    // unauthorized request
-                    $f3->status(403);
-                }else{
-                    // redirect to landing page
-                    $f3->reroute(['login']);
-                }
+                $this->logoutCharacter($f3);
                 // skip route handler and afterroute()
                 $return = false;
             }
@@ -49,53 +40,40 @@ class AccessController extends Controller {
     /**
      * get current character and check if it is a valid character
      * @param \Base $f3
-     * @return bool
+     * @return string
      * @throws \Exception
-     * @throws \Exception\PathfinderException
      */
-    protected function isLoggedIn(\Base $f3): bool {
-        $loginCheck = false;
-        if( $character = $this->getCharacter() ){
-            if($this->checkLogTimer($f3, $character)){
-                if($character->isAuthorized() === 'OK'){
-                    $loginCheck = true;
+    protected function isLoggedIn(\Base $f3): string {
+        $loginStatus = 'UNKNOWN';
+        if($character = $this->getCharacter()){
+            if($character->checkLoginTimer()){
+                if(( $authStatus = $character->isAuthorized()) === 'OK'){
+                    $loginStatus = 'OK';
+                }else{
+                    $loginStatus = $authStatus;
                 }
+            }else{
+                $loginStatus = 'MAX LOGIN TIME EXCEEDED';
             }
+        }else{
+            $loginStatus = 'NO SESSION FOUND';
         }
 
-        return $loginCheck;
-    }
-
-    /**
-     * checks whether a user/character is currently logged in
-     * @param \Base $f3
-     * @param Model\CharacterModel $character
-     * @return bool
-     * @throws \Exception\PathfinderException
-     */
-    private function checkLogTimer(\Base  $f3, Model\CharacterModel $character){
-        $loginCheck = false;
-
+        // log character access status in debug mode
         if(
-            !$character->dry() &&
-            $character->lastLogin
+            $loginStatus !== 'OK' &&
+            $f3->get('DEBUG') === 3
         ){
-            // check logIn time
-            $logInTime = new \DateTime($character->lastLogin);
-            $now = new \DateTime();
-
-            $timeDiff = $now->diff($logInTime);
-
-            $minutes = $timeDiff->days * 60 * 24 * 60;
-            $minutes += $timeDiff->h * 60;
-            $minutes += $timeDiff->i;
-
-            if($minutes <= Config::getPathfinderData('timer.logged')){
-                $loginCheck = true;
-            }
+            self::getLogger('CHARACTER_ACCESS')->write(
+                sprintf(Model\CharacterModel::LOG_ACCESS,
+                    $character->_id ,
+                    $loginStatus,
+                    $character->name
+                )
+            );
         }
 
-        return $loginCheck;
+        return $loginStatus;
     }
 
     /**
@@ -104,7 +82,6 @@ class AccessController extends Controller {
      * @param Model\MapModel $map
      * @return int (number of active connections for this map)
      * @throws \Exception
-     * @throws \Exception\PathfinderException
      * @throws \ZMQSocketException
      */
     protected function broadcastMapData(Model\MapModel $map){
@@ -117,7 +94,6 @@ class AccessController extends Controller {
      * @param Model\MapModel $map
      * @return array
      * @throws \Exception
-     * @throws \Exception\PathfinderException
      */
     protected function getFormattedMapData(Model\MapModel $map){
         $mapData = $map->getData();

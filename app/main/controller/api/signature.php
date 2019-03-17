@@ -13,40 +13,6 @@ use Model;
 
 class Signature extends Controller\AccessController {
 
-
-    /**
-     * get signature data for systems
-     * -> return value of this is limited to a "SINGLE" system
-     * @param \Base $f3
-     * @throws \Exception
-     */
-    public function getAll(\Base $f3){
-        $signatureData = [];
-        $systemIds = (array)$f3->get('POST.systemIds');
-
-        if( !empty($systemIds) ){
-            $activeCharacter = $this->getCharacter();
-
-            /**
-             * @var Model\SystemModel $system
-             */
-            $system = Model\BasicModel::getNew('SystemModel');
-            foreach($systemIds as $systemId){
-                $system->getById($systemId);
-                if(
-                    !$system->dry() &&
-                    $system->hasAccess($activeCharacter)
-                ){
-                    $signatureData = $system->getSignaturesData();
-                }
-
-                $system->reset();
-            }
-        }
-
-        echo json_encode($signatureData);
-    }
-
     /**
      * save or update a full signature data set
      * or save/update just single or multiple signature data
@@ -86,9 +52,6 @@ class Signature extends Controller\AccessController {
 
             // update/add all submitted signatures
             foreach($signatureData as $data){
-                // this key should not be saved (it is an obj)
-                unset($data['updated']);
-
                 $system->getById( (int)$data['systemId'], 0);
 
                 if( !$system->dry() ){
@@ -105,17 +68,15 @@ class Signature extends Controller\AccessController {
                         $signature = $system->getSignatureByName($activeCharacter, $data['name']);
                     }
 
-                    if( is_null($signature) ){
-                        $signature = Model\BasicModel::getNew('SystemSignatureModel');
+                    if(is_null($signature)){
+                        $signature = $system->getNewSignature();
                     }
 
                     if($signature->dry()){
                         // new signature
-                        $signature->systemId = $system;
-                        $signature->setData($data);
+                        $signature->copyfrom($data, ['name', 'groupId', 'typeId', 'description', 'connectionId']);
                     }else{
                         // update signature
-
                         if(
                             isset($data['name']) &&
                             isset($data['value'])
@@ -140,9 +101,6 @@ class Signature extends Controller\AccessController {
 
                         }else{
                             // update complete signature (signature reader dialog)
-
-                            // systemId should not be updated
-                            unset( $data['systemId'] );
 
                             // description should not overwrite existing description
                             if( !empty($signature->description) ){
@@ -171,23 +129,19 @@ class Signature extends Controller\AccessController {
                         }
 
                         if( $signature->hasChanged($newData) ){
-                            $signature->setData($newData);
+                            $signature->copyfrom($newData, ['name', 'groupId', 'typeId', 'description', 'connectionId']);
                         }
                     }
 
-                    $signature->save($activeCharacter);
-                    $updatedSignatureIds[] = $signature->id;
+                    $system->saveSignature($signature, $activeCharacter);
 
-                    // get a fresh signature object with the new data. This is a bad work around!
-                    // but i could not figure out what the problem was when using the signature model, saved above :(
-                    // -> some caching problems
-                    /**
-                     * @var $newSignature Model\SystemSignatureModel
-                     */
-                    $newSignature = Model\BasicModel::getNew('SystemSignatureModel');
-                    $newSignature->getById( $signature->id, 0);
+                    // TODO figure out why $system->connectionId is NULL after change/save
+                    //-> workaround: get data from "new" $signature model
+                    $signatureNew = Model\BasicModel::getNew('SystemSignatureModel');
+                    $signatureNew->getById($signature->_id);
 
-                    $return->signatures[] = $newSignature->getData();
+                    $updatedSignatureIds[] = $signatureNew->_id;
+                    $return->signatures[] = $signatureNew->getData();
 
                     $signature->reset();
                 }
@@ -207,13 +161,11 @@ class Signature extends Controller\AccessController {
                 ){
                     $allSignatures = $system->getSignatures();
                     foreach($allSignatures as $tempSignature){
-                        if( !in_array($tempSignature->id, $updatedSignatureIds)){
+                        if( !in_array($tempSignature->_id, $updatedSignatureIds)){
                             $tempSignature->delete( $activeCharacter );
                         }
                     }
                 }
-
-
             }
         }
 
@@ -226,8 +178,11 @@ class Signature extends Controller\AccessController {
      * @throws \Exception
      */
     public function delete(\Base $f3){
-        $signatureIds = $f3->get('POST.signatureIds');
+        $signatureIds = array_unique(array_map('intval', (array)$f3->get('POST.signatureIds')));
         $activeCharacter = $this->getCharacter();
+
+        $return = (object) [];
+        $return->deletedSignatureIds = [];
 
         /**
          * @var Model\SystemSignatureModel $signature
@@ -235,11 +190,13 @@ class Signature extends Controller\AccessController {
         $signature = Model\BasicModel::getNew('SystemSignatureModel');
         foreach($signatureIds as $signatureId){
             $signature->getById($signatureId);
-            $signature->delete( $activeCharacter );
+            if($signature->delete($activeCharacter)){
+                $return->deletedSignatureIds[] = $signatureId;
+            }
             $signature->reset();
         }
 
-        echo json_encode([]);
+        echo json_encode($return);
     }
 
 } 

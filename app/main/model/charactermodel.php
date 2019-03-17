@@ -11,7 +11,6 @@ namespace Model;
 use Controller\Ccp\Sso as Sso;
 use Controller\Api\User as User;
 use DB\SQL\Schema;
-use lib\Util;
 use lib\Config;
 use lib\Socket;
 use Model\Universe;
@@ -23,7 +22,9 @@ class CharacterModel extends BasicModel {
     /**
      * cache key prefix for getData(); result WITH log data
      */
-    const DATA_CACHE_KEY_LOG = 'LOG';
+    const DATA_CACHE_KEY_LOG                        = 'LOG';
+
+    const LOG_ACCESS                                = 'charId: [%20s], status: %s, charName: %s';
 
     /**
      * character authorization status
@@ -32,6 +33,7 @@ class CharacterModel extends BasicModel {
     const AUTHORIZATION_STATUS = [
         'OK'            => true,                                        // success
         'UNKNOWN'       => 'error',                                     // general authorization error
+        'CHARACTER'     => 'failed to match character whitelist',
         'CORPORATION'   => 'failed to match corporation whitelist',
         'ALLIANCE'      => 'failed to match alliance whitelist',
         'KICKED'        => 'character is kicked',
@@ -74,15 +76,15 @@ class CharacterModel extends BasicModel {
             'nullable' => false,
             'default' => ''
         ],
-        'crestAccessToken' => [
+        'esiAccessToken' => [
             'type' => Schema::DT_VARCHAR256
         ],
-        'crestAccessTokenUpdated' => [
+        'esiAccessTokenExpires' => [
             'type' => Schema::DT_TIMESTAMP,
             'default' => Schema::DF_CURRENT_TIMESTAMP,
             'index' => true
         ],
-        'crestRefreshToken' => [
+        'esiRefreshToken' => [
             'type' => Schema::DT_VARCHAR256
         ],
         'esiScopes' => [
@@ -141,6 +143,11 @@ class CharacterModel extends BasicModel {
             'nullable' => false,
             'default' => 1
         ],
+        'selectLocation' => [
+            'type' => Schema::DT_BOOL,
+            'nullable' => false,
+            'default' => 0
+        ],
         'securityStatus' => [
             'type' => Schema::DT_FLOAT,
             'nullable' => false,
@@ -180,15 +187,12 @@ class CharacterModel extends BasicModel {
             // no cached character data found
 
             $characterData = (object) [];
-            $characterData->id = $this->id;
+            $characterData->id = $this->_id;
             $characterData->name = $this->name;
             $characterData->role = $this->roleId->getData();
             $characterData->shared = $this->shared;
             $characterData->logLocation = $this->logLocation;
-
-            if($this->authStatus){
-                $characterData->authStatus = $this->authStatus;
-            }
+            $characterData->selectLocation = $this->selectLocation;
 
             if($addCharacterLogData){
                 if($logModel = $this->getLog()){
@@ -210,6 +214,11 @@ class CharacterModel extends BasicModel {
             // the cached date has to be cleared manually on any change
             // this includes system, connection,... changes (all dependencies)
             $this->updateCacheData($characterData, $cacheKeyModifier);
+        }
+
+        // temp "authStatus" should not be cached
+        if($this->authStatus){
+            $characterData->authStatus = $this->authStatus;
         }
 
         return $characterData;
@@ -255,20 +264,6 @@ class CharacterModel extends BasicModel {
     }
 
     /**
-     * set API accessToken for current session
-     * -> update "tokenUpdated" column on change
-     * -> this is required for expire checking!
-     * @param string $accessToken
-     * @return string
-     */
-    public function set_crestAccessToken($accessToken){
-        if($this->crestAccessToken !== $accessToken){
-            $this->touch('crestAccessTokenUpdated');
-        }
-        return $accessToken;
-    }
-
-    /**
      * setter for "kicked" until time
      * @param $minutes
      * @return mixed|null|string
@@ -299,8 +294,9 @@ class CharacterModel extends BasicModel {
 
     /**
      * setter for "banned" status
-     * @param bool|int $status
-     * @return mixed
+     * @param $status
+     * @return mixed|string|null
+     * @throws \Exception
      */
     public function set_banned($status){
         if($this->allowBanChange){
@@ -330,10 +326,9 @@ class CharacterModel extends BasicModel {
         $logLocation = (bool)$logLocation;
         if(
             !$logLocation &&
-            $logLocation !== $this->logLocation &&
-            $this->hasLog()
+            $logLocation !== $this->logLocation
         ){
-            $this->getLog()->erase();
+            $this->deleteLog();
         }
 
         return $logLocation;
@@ -405,6 +400,7 @@ class CharacterModel extends BasicModel {
      */
     private function resetAdminColumns(){
         $this->kick();
+        $this->ban();
     }
 
     /**
@@ -473,51 +469,57 @@ class CharacterModel extends BasicModel {
      * get ESI API "access_token" from OAuth
      * @return bool|mixed
      * @throws \Exception
-     * @throws \Exception\PathfinderException
      */
     public function getAccessToken(){
         $accessToken = false;
+        $refreshToken = true;
 
-        // check if there is already an "accessToken" for this user
-        // check expire timer for stored "accessToken"
+        $timezone = self::getF3()->get('getTimeZone')();
+        $now = new \DateTime('now', $timezone);
+
         if(
-            !empty($this->crestAccessToken) &&
-            !empty($this->crestAccessTokenUpdated)
+            !empty($this->esiAccessToken) &&
+            !empty($this->esiAccessTokenExpires)
         ){
-            $timezone = self::getF3()->get('getTimeZone')();
-            $tokenTime = \DateTime::createFromFormat(
+            $expireTime = \DateTime::createFromFormat(
                 'Y-m-d H:i:s',
-                $this->crestAccessTokenUpdated,
+                $this->esiAccessTokenExpires,
                 $timezone
             );
-            // add expire time buffer for this "accessToken"
-            // token should be marked as "deprecated" BEFORE it actually expires.
-            $timeBuffer = 2 * 60;
-            $tokenTime->add(new \DateInterval('PT' . (Sso::ACCESS_KEY_EXPIRE_TIME - $timeBuffer) . 'S'));
 
-            $now = new \DateTime('now', $timezone);
-            if($tokenTime->getTimestamp() > $now->getTimestamp()){
-                $accessToken = $this->crestAccessToken;
+            // check if token is not expired
+            if($expireTime->getTimestamp() > $now->getTimestamp()){
+                // token still valid
+                $accessToken = $this->esiAccessToken;
+
+                // check if token should be renewed (close to expire)
+                $timeBuffer = 2 * 60;
+                $expireTime->sub(new \DateInterval('PT' . $timeBuffer . 'S'));
+
+                if($expireTime->getTimestamp() > $now->getTimestamp()){
+                    // token NOT close to expire
+                    $refreshToken = false;
+                }
             }
         }
 
-        // if no "accessToken" was found -> get a fresh one by an existing "refreshToken"
+        // no valid "accessToken" found OR
+        // existing token is close to expire
+        // -> get a fresh one by an existing "refreshToken"
+        // -> in case request for new token fails (e.g. timeout) and old token is still valid -> keep old token
         if(
-            !$accessToken &&
-            !empty($this->crestRefreshToken)
+            $refreshToken &&
+            !empty($this->esiRefreshToken)
         ){
-            // no accessToken found OR token is deprecated
             $ssoController = new Sso();
-            $accessData =  $ssoController->refreshAccessToken($this->crestRefreshToken);
+            $accessData =  $ssoController->refreshAccessToken($this->esiRefreshToken);
 
-            if(
-                isset($accessData->accessToken) &&
-                isset($accessData->refreshToken)
-            ){
-                $this->crestAccessToken = $accessData->accessToken;
+            if(isset($accessData->accessToken, $accessData->esiAccessTokenExpires, $accessData->refreshToken)){
+                $this->esiAccessToken = $accessData->accessToken;
+                $this->esiAccessTokenExpires = $accessData->esiAccessTokenExpires;
                 $this->save();
 
-                $accessToken = $this->crestAccessToken;
+                $accessToken = $this->esiAccessToken;
             }
         }
 
@@ -528,49 +530,97 @@ class CharacterModel extends BasicModel {
      * check if character  is currently kicked
      * @return bool
      */
-    public function isKicked(){
+    public function isKicked() : bool {
         $kicked = false;
         if( !is_null($this->kicked) ){
-            $kickedUntil = new \DateTime();
-            $kickedUntil->setTimestamp( (int)strtotime($this->kicked) );
-            $now = new \DateTime();
-            $kicked = ($kickedUntil > $now);
+            try{
+                $kickedUntil = new \DateTime();
+                $kickedUntil->setTimestamp( (int)strtotime($this->kicked) );
+                $now = new \DateTime();
+                $kicked = ($kickedUntil > $now);
+            }catch(\Exception $e){
+                self::getF3()->error(500, $e->getMessage(), $e->getTrace());
+            }
         }
 
         return $kicked;
     }
 
     /**
+     * checks whether this character is currently logged in
+     * @return bool
+     */
+    public function checkLoginTimer() : bool {
+        $loginCheck = false;
+
+        if( !$this->dry() && $this->lastLogin ){
+            // get max login time (minutes) from config
+            $maxLoginMinutes = (int)Config::getPathfinderData('timer.logged');
+            if($maxLoginMinutes){
+                $timezone = self::getF3()->get('getTimeZone')();
+                try{
+                    $now = new \DateTime('now', $timezone);
+                    $logoutTime = new \DateTime($this->lastLogin, $timezone);
+                    $logoutTime->add(new \DateInterval('PT' . $maxLoginMinutes . 'M'));
+                    if($logoutTime->getTimestamp() > $now->getTimestamp()){
+                        $loginCheck = true;
+                    }
+                }catch(\Exception $e){
+                    self::getF3()->error(500, $e->getMessage(), $e->getTrace());
+                }
+            }else{
+                // no "max login" timer configured -> character still logged in
+                $loginCheck = true;
+            }
+        }
+
+        return $loginCheck;
+    }
+
+    /**
      * checks whether this character is authorized to log in
      * -> check corp/ally whitelist config (pathfinder.ini)
-     * @return bool
-     * @throws \Exception\PathfinderException
+     * @return string
      */
-    public function isAuthorized(){
+    public function isAuthorized() : string {
         $authStatus = 'UNKNOWN';
 
         // check whether character is banned or temp kicked
         if(is_null($this->banned)){
             if( !$this->isKicked() ){
+                $whitelistCharacter = array_filter( array_map('trim', (array)Config::getPathfinderData('login.character') ) );
                 $whitelistCorporations = array_filter( array_map('trim', (array)Config::getPathfinderData('login.corporation') ) );
                 $whitelistAlliance = array_filter( array_map('trim', (array)Config::getPathfinderData('login.alliance') ) );
 
                 if(
+                    empty($whitelistCharacter) &&
                     empty($whitelistCorporations) &&
                     empty($whitelistAlliance)
                 ){
                     // no corp/ally restrictions set -> any character is allowed to login
                     $authStatus = 'OK';
                 }else{
+                    // check if character is set in whitelist
+                    if(
+                        !empty($whitelistCharacter) &&
+                        in_array((int)$this->_id, $whitelistCharacter)
+                    ){
+                        $authStatus =  'OK';
+                    }else{
+                        $authStatus = 'CHARACTER';
+                    }
+
                     // check if character corporation is set in whitelist
                     if(
+                        $authStatus != 'OK' &&
                         !empty($whitelistCorporations) &&
-                        $this->hasCorporation() &&
-                        in_array((int)$this->get('corporationId', true), $whitelistCorporations)
+                        $this->hasCorporation()
                     ){
-                        $authStatus = 'OK';
-                    }else{
-                        $authStatus = 'CORPORATION';
+                        if( in_array((int)$this->get('corporationId', true), $whitelistCorporations) ){
+                            $authStatus = 'OK';
+                        }else{
+                            $authStatus = 'CORPORATION';
+                        }
                     }
 
                     // check if character alliance is set in whitelist
@@ -600,7 +650,6 @@ class CharacterModel extends BasicModel {
      * get Pathfinder role for character
      * @return RoleModel
      * @throws \Exception
-     * @throws \Exception\PathfinderException
      */
     public function requestRole() : RoleModel{
         $role = null;
@@ -646,7 +695,6 @@ class CharacterModel extends BasicModel {
      * request all corporation roles granted to this character
      * @return array
      * @throws \Exception
-     * @throws \Exception\PathfinderException
      */
     protected function requestRoles(){
         $rolesData = [];
@@ -702,12 +750,12 @@ class CharacterModel extends BasicModel {
         ){
             // Try to pull data from API
             if( $accessToken = $this->getAccessToken() ){
-                $onlineData = self::getF3()->ccpClient->getCharacterOnlineData($this->_id, $accessToken, $additionalOptions);
+                $onlineData = self::getF3()->ccpClient()->getCharacterOnlineData($this->_id, $accessToken);
 
                 // check whether character is currently ingame online
                 if(is_bool($onlineData['online'])){
                     if($onlineData['online'] === true){
-                        $locationData = self::getF3()->ccpClient->getCharacterLocationData($this->_id, $accessToken, $additionalOptions);
+                        $locationData = self::getF3()->ccpClient()->getCharacterLocationData($this->_id, $accessToken);
 
                         if( !empty($locationData['system']['id']) ){
                             // character is currently in-game
@@ -751,8 +799,17 @@ class CharacterModel extends BasicModel {
                             // get "more" data for systemId and/or stationId -----------------------------------------
                             if( !empty($lookupUniverseIds) ){
                                 // get "more" information for some Ids (e.g. name)
-                                $universeData = self::getF3()->ccpClient->getUniverseNamesData($lookupUniverseIds, $additionalOptions);
-                                if( !empty($universeData) ){
+                                $universeData = self::getF3()->ccpClient()->getUniverseNamesData($lookupUniverseIds);
+
+                                if( !empty($universeData) && !isset($universeData['error']) ){
+                                    // We expect max ONE system AND/OR station data, not an array of e.g. systems
+                                    if(!empty($universeData['system'])){
+                                        $universeData['system'] = reset($universeData['system']);
+                                    }
+                                    if(!empty($universeData['station'])){
+                                        $universeData['station'] = reset($universeData['station']);
+                                    }
+
                                     $logData = array_replace_recursive($logData, $universeData);
                                 }else{
                                     // this is important! universe data is a MUST HAVE!
@@ -795,7 +852,7 @@ class CharacterModel extends BasicModel {
 
                             // check ship data for changes ------------------------------------------------------------
                             if( !$deleteLog ){
-                                $shipData = self::getF3()->ccpClient->getCharacterShipData($this->_id, $accessToken, $additionalOptions);
+                                $shipData = self::getF3()->ccpClient()->getCharacterShipData($this->_id, $accessToken);
 
                                 // IDs for "shipTypeId" that require more data
                                 $lookupShipTypeId = 0;
@@ -866,40 +923,9 @@ class CharacterModel extends BasicModel {
             $deleteLog = true;
         }
 
-        //in case of failure (invalid API response) increase or reset "retry counter"
-        if( $user = $this->getUser() ){
-            // Session data does not exists in CLI mode (Cronjob)
-            if( $sessionCharacterData = $user->getSessionCharacterData($this->id, false) ){
-                $updateRetry = (int)$sessionCharacterData['UPDATE_RETRY'];
-                $newRetry =  $updateRetry;
-                if($invalidResponse){
-                    $newRetry++;
-
-                    if($newRetry >= 3){
-                        // no proper character log data (3 fails in a row))
-                        $newRetry = 0;
-                        $deleteLog = true;
-                    }
-                }else{
-                    // reset retry counter
-                    $newRetry = 0;
-                }
-
-                if($updateRetry !== $newRetry){
-                    // update retry counter
-                    $sessionCharacterData['UPDATE_RETRY'] = $newRetry;
-                    $sessionCharacters = self::mergeSessionCharacterData([$sessionCharacterData]);
-                    self::getF3()->set(User::SESSION_KEY_CHARACTERS, $sessionCharacters);
-                }
-            }
-        }
-
-        if(
-            $deleteLog &&
-            $this->hasLog()
-        ){
-            // delete existing log
-            $this->characterLog->erase();
+        if($deleteLog){
+            self::log('DELETE LOG!');
+            $this->deleteLog();
         }
 
         return $this;
@@ -928,14 +954,14 @@ class CharacterModel extends BasicModel {
             // -> the "id" check is just for security and should NEVER fail!
             $ssoController = new Sso();
             if(
-                !is_null( $verificationCharacterData = $ssoController->verifyCharacterData($accessToken) ) &&
-                $verificationCharacterData->CharacterID === $this->_id
+                !empty( $verificationCharacterData = $ssoController->verifyCharacterData($accessToken) ) &&
+                $verificationCharacterData['characterId'] === $this->_id
             ){
                 // get character data from API
                 $characterData = $ssoController->getCharacterData($this->_id);
                 if( !empty($characterData->character) ){
-                    $characterData->character['ownerHash'] = $verificationCharacterData->CharacterOwnerHash;
-                    $characterData->character['esiScopes'] = Util::convertScopesString($verificationCharacterData->Scopes);
+                    $characterData->character['ownerHash'] = $verificationCharacterData['characterOwnerHash'];
+                    $characterData->character['esiScopes'] = $verificationCharacterData['scopes'];
 
                     $this->copyfrom($characterData->character, ['ownerHash', 'esiScopes', 'securityStatus']);
                     $this->corporationId = $characterData->corporation;
@@ -1002,7 +1028,6 @@ class CharacterModel extends BasicModel {
     /**
      * get all accessible map models for this character
      * @return MapModel[]
-     * @throws \Exception\PathfinderException
      */
     public function getMaps(){
         $this->filter(
@@ -1089,7 +1114,7 @@ class CharacterModel extends BasicModel {
         }
 
         // delete auth cookie data ------------------------------------------------------------------------------------
-        if($deleteCookie ){
+        if($deleteCookie){
             $this->deleteAuthentications();
         }
     }
@@ -1099,7 +1124,7 @@ class CharacterModel extends BasicModel {
      * @param array $characterDataBase
      * @return array
      */
-    public static function mergeSessionCharacterData(array $characterDataBase = []){
+    public static function mergeSessionCharacterData(array $characterDataBase = []) : array {
         $addData = [];
         // get current session characters to be merged with
         $characterData = (array)self::getF3()->get(User::SESSION_KEY_CHARACTERS);

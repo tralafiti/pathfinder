@@ -8,12 +8,11 @@
 
 namespace Model;
 
-use Controller\Api\System;
 use DB\SQL\Schema;
 use data\file\FileHandler;
+use Exception\ConfigException;
 use lib\Config;
 use lib\logging;
-use Exception\PathfinderException;
 
 class MapModel extends AbstractMapTrackingModel {
 
@@ -45,7 +44,7 @@ class MapModel extends AbstractMapTrackingModel {
                     'on-delete' => 'CASCADE'
                 ]
             ],
-            'validate' => 'validate_notDry',
+            'validate' => 'notDry',
             'activity-log' => true
         ],
         'typeId' => [
@@ -58,7 +57,7 @@ class MapModel extends AbstractMapTrackingModel {
                     'on-delete' => 'CASCADE'
                 ]
             ],
-            'validate' => 'validate_notDry',
+            'validate' => 'notDry',
             'activity-log' => true
         ],
         'name' => [
@@ -197,10 +196,9 @@ class MapModel extends AbstractMapTrackingModel {
     }
 
     /**
-     * get map data
-     * -> this includes system and connection data as well!
+     * get data
+     * -> this includes system and connection data as well
      * @return \stdClass
-     * @throws PathfinderException
      * @throws \Exception
      */
     public function getData(){
@@ -279,7 +277,7 @@ class MapModel extends AbstractMapTrackingModel {
                     $characterData[] = $character->getData();
                 }
                 $mapData->access->character = $characterData;
-            } elseif($this->isCorporation()){
+            }elseif($this->isCorporation()){
                 $corporations = $this->getCorporations();
                 $corporationData = [];
 
@@ -287,7 +285,7 @@ class MapModel extends AbstractMapTrackingModel {
                     $corporationData[] = $corporation->getData();
                 }
                 $mapData->access->corporation = $corporationData;
-            } elseif($this->isAlliance()){
+            }elseif($this->isAlliance()){
                 $alliances = $this->getAlliances();
                 $allianceData = [];
 
@@ -302,10 +300,10 @@ class MapModel extends AbstractMapTrackingModel {
             $mapDataAll->mapData = $mapData;
 
             // map system data ----------------------------------------------------------------------------------------
-            $mapDataAll->systems = $this->getSystemData();
+            $mapDataAll->systems = $this->getSystemsData();
 
             // map connection data ------------------------------------------------------------------------------------
-            $mapDataAll->connections = $this->getConnectionData();
+            $mapDataAll->connections = $this->getConnectionsData();
 
             // max caching time for a map
             // the cached date has to be cleared manually on any change
@@ -470,22 +468,20 @@ class MapModel extends AbstractMapTrackingModel {
      * @return SystemModel
      * @throws \Exception
      */
-    public function getNewSystem($systemId){
+    public function getNewSystem(int $systemId) : SystemModel {
         // check for "inactive" system
         $system = $this->getSystemByCCPId($systemId);
-        if( is_null($system) ){
-            // get blank system
-            $systemController = new System();
-            $systems = $systemController->getSystemModelByIds([$systemId]);
-            if( count($systems) ){
-                $system = reset($systems);
-                $system->mapId = $this->_id;
-            }else{
-                // should NEVER happen -> systemId does NOT exist in New Eden!!
-                $this->getF3()->error(500, 'SystemId "' . $systemId . '"" does not exist in EVE!' );
-            }
-
+        if(is_null($system)){
+            /**
+             * NO ->rel() here! we work with unsaved models
+             * @var $system SystemModel
+             */
+            $system = self::getNew('SystemModel');
+            $system->systemId = $systemId;
+            $system->mapId = $this;
+            $system->setType();
         }
+
         $system->setActive(true);
 
         return $system;
@@ -496,12 +492,13 @@ class MapModel extends AbstractMapTrackingModel {
      * @param SystemModel $sourceSystem
      * @param SystemModel $targetSystem
      * @return ConnectionModel
+     * @throws \Exception
      */
-    public function getNewConnection(SystemModel $sourceSystem, SystemModel $targetSystem){
+    public function getNewConnection(SystemModel $sourceSystem, SystemModel $targetSystem) : ConnectionModel {
         /**
          * @var $connection ConnectionModel
          */
-        $connection = $this->rel('connections');
+        $connection = self::getNew('ConnectionModel');
         $connection->mapId = $this;
         $connection->source = $sourceSystem;
         $connection->target = $targetSystem;
@@ -513,7 +510,7 @@ class MapModel extends AbstractMapTrackingModel {
      * @param int $id
      * @return null|SystemModel
      */
-    public function getSystemById($id){
+    public function getSystemById(int $id){
         /**
          * @var $system SystemModel
          */
@@ -534,7 +531,7 @@ class MapModel extends AbstractMapTrackingModel {
      * @param array $filter
      * @return null|SystemModel
      */
-    public function getSystemByCCPId($systemId, $filter = []){
+    public function getSystemByCCPId(int $systemId, array $filter = []){
         /**
          * @var $system SystemModel
          */
@@ -542,7 +539,7 @@ class MapModel extends AbstractMapTrackingModel {
 
         $query = [
             'mapId = :mapId AND systemId = :systemId',
-            ':mapId' => $this->id,
+            ':mapId' => $this->_id,
             ':systemId' => $systemId
         ];
 
@@ -560,7 +557,7 @@ class MapModel extends AbstractMapTrackingModel {
      * get either all system models in this map
      * @return SystemModel[]
      */
-    public function getSystems(){
+    protected function getSystems(){
         $systems = [];
 
         // orderBy x-Coordinate for smoother frontend animation (left to right)
@@ -580,7 +577,7 @@ class MapModel extends AbstractMapTrackingModel {
      * @return \stdClass[]
      * @throws \Exception
      */
-    public function getSystemData(){
+    public function getSystemsData() : array{
         $systemData = [];
         $systems  = $this->getSystems();
 
@@ -599,7 +596,7 @@ class MapModel extends AbstractMapTrackingModel {
      * @param int $id
      * @return null|ConnectionModel
      */
-    public function getConnectionById($id){
+    public function getConnectionById(int $id){
         /**
          * @var $connection ConnectionModel
          */
@@ -649,7 +646,7 @@ class MapModel extends AbstractMapTrackingModel {
      * get all connection data in this map
      * @return \stdClass[]
      */
-    public function getConnectionData(){
+    public function getConnectionsData() : array {
         $connectionData = [];
         $connections  = $this->getConnections();
 
@@ -661,6 +658,34 @@ class MapModel extends AbstractMapTrackingModel {
         }
 
         return $connectionData;
+    }
+
+    /**
+     * get all structures data for this map
+     * @param array $systemIds
+     * @return array
+     */
+    public function getStructuresData(array $systemIds = []) : array {
+        $structuresData = [];
+        $corporations = $this->getAllCorporations();
+
+        foreach($corporations as $corporation){
+            // corporations should be unique
+            if( !isset($structuresData[$corporation->_id]) ){
+                // get all structures for current corporation
+                $corporationStructuresData = $corporation->getStructuresData($systemIds);
+                if( !empty($corporationStructuresData) ){
+                    // corporation has structures
+                    $structuresData[$corporation->_id] = [
+                        'id' => $corporation->_id,
+                        'name' => $corporation->name,
+                        'structures' => $corporationStructuresData
+                    ];
+                }
+            }
+        }
+
+        return $structuresData;
     }
 
     /**
@@ -765,9 +790,8 @@ class MapModel extends AbstractMapTrackingModel {
      * checks whether a character has access to this map or not
      * @param CharacterModel $characterModel
      * @return bool
-     * @throws PathfinderException
      */
-    public function hasAccess(CharacterModel $characterModel){
+    public function hasAccess(CharacterModel $characterModel) : bool {
         $hasAccess = false;
 
         if( !$this->dry() ){
@@ -810,19 +834,57 @@ class MapModel extends AbstractMapTrackingModel {
     }
 
     /**
+     * get corporations that have access to this map
+     * @return CorporationModel[]
+     */
+    public function getCorporations() : array {
+        $corporations = [];
+
+        if($this->isCorporation()){
+            $this->filter('mapCorporations', ['active = ?', 1]);
+
+            if($this->mapCorporations){
+                foreach($this->mapCorporations as $mapCorporation){
+                    $corporations[] = $mapCorporation->corporationId;
+                }
+            }
+        }
+
+        return $corporations;
+    }
+
+    /**
+     * get alliances that have access to this map
+     * @return AllianceModel[]
+     */
+    public function getAlliances() : array {
+        $alliances = [];
+
+        if($this->isAlliance()){
+            $this->filter('mapAlliances', ['active = ?', 1]);
+
+            if($this->mapAlliances){
+                foreach($this->mapAlliances as $mapAlliance){
+                    $alliances[] = $mapAlliance->allianceId;
+                }
+            }
+        }
+
+        return $alliances;
+    }
+
+    /**
      * get all character models that are currently online "viewing" this map
      * @param array $options filter options
      * @return CharacterModel[]
      */
-    private function getAllCharacters($options = []){
+    private function getAllCharacters($options = []) : array {
         $characters = [];
 
         if($this->isPrivate()){
-            $activeCharacters = $this->getCharacters();
-
             // add active character for each user
-            foreach($activeCharacters as $activeCharacter){
-                $characters[] = $activeCharacter;
+            foreach($this->getCharacters() as $character){
+                $characters[] = $character;
             }
         }elseif($this->isCorporation()){
             $corporations = $this->getCorporations();
@@ -870,18 +932,35 @@ class MapModel extends AbstractMapTrackingModel {
     }
 
     /**
-     * get all corporations that have access to this map
+     * get all corporations that have access
+     * -> for private maps -> get corporations from characters
+     * -> for corporation maps -> get corporations
+     * -> for alliance maps -> get corporations from alliances
      * @return CorporationModel[]
      */
-    public function getCorporations(){
+    public function getAllCorporations() : array {
         $corporations = [];
 
-        if($this->isCorporation()){
-            $this->filter('mapCorporations', ['active = ?', 1]);
-
-            if($this->mapCorporations){
-                foreach($this->mapCorporations as $mapCorporation){
-                    $corporations[] = $mapCorporation->corporationId;
+        if($this->isPrivate()){
+            foreach($this->getCharacters() as $character){
+                if(
+                    $character->hasCorporation() &&
+                    !array_key_exists($character->get('corporationId', true), $corporations)
+                ){
+                    $corporations[$character->getCorporation()->_id] = $character->getCorporation();
+                }
+            }
+        }elseif($this->isCorporation()){
+            $corporations = $this->getCorporations();
+        }elseif($this->isAlliance()){
+            foreach($this->getAlliances() as $alliance){
+                foreach($alliance->getCharacters() as $character){
+                    if(
+                        $character->hasCorporation() &&
+                        !array_key_exists($character->get('corporationId', true), $corporations)
+                    ){
+                        $corporations[$character->getCorporation()->_id] = $character->getCorporation();
+                    }
                 }
             }
         }
@@ -890,29 +969,9 @@ class MapModel extends AbstractMapTrackingModel {
     }
 
     /**
-     * get all alliances that have access to this map
-     * @return AllianceModel[]
-     */
-    public function getAlliances(){
-        $alliances = [];
-
-        if($this->isAlliance()){
-            $this->filter('mapAlliances', ['active = ?', 1]);
-
-            if($this->mapAlliances){
-                foreach($this->mapAlliances as $mapAlliance){
-                    $alliances[] = $mapAlliance->allianceId;
-                }
-            }
-        }
-
-        return $alliances;
-    }
-
-    /**
      * @param string $action
-     * @return Logging\LogInterface
-     * @throws PathfinderException
+     * @return logging\LogInterface
+     * @throws ConfigException
      */
     public function newLog($action = ''): Logging\LogInterface{
         $logChannelData = $this->getLogChannelData();
@@ -961,7 +1020,7 @@ class MapModel extends AbstractMapTrackingModel {
      * get object relevant data for model log channel
      * @return array
      */
-    public function getLogChannelData() : array{
+    public function getLogChannelData() : array {
         return [
             'channelId' => $this->_id,
             'channelName' => $this->name
@@ -971,13 +1030,17 @@ class MapModel extends AbstractMapTrackingModel {
      * get object relevant data for model log object
      * @return array
      */
-    public function getLogObjectData() : array{
+    public function getLogObjectData() : array {
         return [
             'objId' => $this->_id,
             'objName' => $this->name
         ];
     }
 
+    /**
+     * map log formatter callback
+     * @return \Closure
+     */
     protected function getLogFormatter(){
         return function(&$rowDataObj){
             unset($rowDataObj['extra']);
@@ -987,7 +1050,6 @@ class MapModel extends AbstractMapTrackingModel {
     /**
      * check if "activity logging" is enabled for this map type
      * @return bool
-     * @throws PathfinderException
      */
     public function isActivityLogEnabled(): bool {
         return $this->logActivity && (bool) Config::getMapsDefaultConfig($this->typeId->name)['log_activity_enabled'];
@@ -996,7 +1058,6 @@ class MapModel extends AbstractMapTrackingModel {
     /**
      * check if "history logging" is enabled for this map type
      * @return bool
-     * @throws PathfinderException
      */
     public function isHistoryLogEnabled(): bool {
         return $this->logHistory && (bool) Config::getMapsDefaultConfig($this->typeId->name)['log_history_enabled'];
@@ -1006,7 +1067,7 @@ class MapModel extends AbstractMapTrackingModel {
      * check if "Slack WebHook" is enabled for this map type
      * @param string $channel
      * @return bool
-     * @throws PathfinderException
+     * @throws ConfigException
      */
     public function isSlackChannelEnabled(string $channel): bool {
         $enabled = false;
@@ -1016,7 +1077,7 @@ class MapModel extends AbstractMapTrackingModel {
             switch($channel){
                 case 'slackChannelHistory': $defaultMapConfigKey = 'send_history_slack_enabled'; break;
                 case 'slackChannelRally': $defaultMapConfigKey = 'send_rally_slack_enabled'; break;
-                default: throw new PathfinderException(sprintf(self::ERROR_SLACK_CHANNEL, $channel));
+                default: throw new ConfigException(sprintf(self::ERROR_SLACK_CHANNEL, $channel));
             }
 
             if((bool) Config::getMapsDefaultConfig($this->typeId->name)[$defaultMapConfigKey]){
@@ -1034,7 +1095,7 @@ class MapModel extends AbstractMapTrackingModel {
      * check if "Discord WebHook" is enabled for this map type
      * @param string $channel
      * @return bool
-     * @throws PathfinderException
+     * @throws ConfigException
      */
     public function isDiscordChannelEnabled(string $channel): bool {
         $enabled = false;
@@ -1044,7 +1105,7 @@ class MapModel extends AbstractMapTrackingModel {
             switch($channel){
                 case 'discordWebHookURLHistory': $defaultMapConfigKey = 'send_history_discord_enabled'; break;
                 case 'discordWebHookURLRally': $defaultMapConfigKey = 'send_rally_discord_enabled'; break;
-                default: throw new PathfinderException(sprintf(self::ERROR_DISCORD_CHANNEL, $channel));
+                default: throw new ConfigException(sprintf(self::ERROR_DISCORD_CHANNEL, $channel));
             }
 
             if((bool) Config::getMapsDefaultConfig($this->typeId->name)[$defaultMapConfigKey]){
@@ -1062,7 +1123,6 @@ class MapModel extends AbstractMapTrackingModel {
      * check if "E-Mail" Log is enabled for this map
      * @param string $type
      * @return bool
-     * @throws PathfinderException
      */
     public function isMailSendEnabled(string $type): bool{
         $enabled = false;
@@ -1136,7 +1196,6 @@ class MapModel extends AbstractMapTrackingModel {
      * @param string $type
      * @param bool $addJson
      * @return \stdClass
-     * @throws PathfinderException
      */
     public function getSMTPConfig(string $type, bool $addJson = true): \stdClass{
         $config = Config::getSMTPConfig();
@@ -1149,7 +1208,7 @@ class MapModel extends AbstractMapTrackingModel {
      * checks whether this map is private map
      * @return bool
      */
-    public function isPrivate(){
+    public function isPrivate() : bool {
         return ($this->typeId->id === 2);
     }
 
@@ -1157,7 +1216,7 @@ class MapModel extends AbstractMapTrackingModel {
      * checks whether this map is corporation map
      * @return bool
      */
-    public function isCorporation(){
+    public function isCorporation() : bool {
         return ($this->typeId->id === 3);
     }
 
@@ -1165,7 +1224,7 @@ class MapModel extends AbstractMapTrackingModel {
      * checks whether this map is alliance map
      * @return bool
      */
-    public function isAlliance(){
+    public function isAlliance() : bool {
         return ($this->typeId->id === 4);
     }
 
@@ -1182,14 +1241,39 @@ class MapModel extends AbstractMapTrackingModel {
     }
 
     /**
+     * get deeplink url for map
+     * -> optional return link for map + system
+     * @param int $systemId
+     * @return string
+     */
+    public function getDeeplinkUrl(int $systemId = 0) : string {
+        $url = '';
+        if( !$this->dry() ){
+            $param =  rawurlencode(base64_encode($this->_id));
+            $param .=  $systemId ? '_' . rawurlencode(base64_encode($systemId)) : '';
+            $url = $this->getF3()->get('SCHEME') . '://' . $this->getF3()->get('HOST') . $this->getF3()->alias('map', ['*' => '/' . $param]);
+        }
+        return $url;
+    }
+
+    /**
      * get log file data
      * @param int $offset
      * @param int $limit
      * @return array
      */
-    public function getLogData(int $offset = FileHandler::LOG_FILE_OFFSET, int $limit = FileHandler::LOG_FILE_LIMIT): array {
+    public function getLogData(int $offset = FileHandler::LOG_FILE_OFFSET, int $limit = FileHandler::LOG_FILE_LIMIT) : array {
         $streamConf = $this->getStreamConfig();
-        return FileHandler::readLogFile($streamConf->stream, $offset, $limit, $this->getLogFormatter());
+
+        $rowFormatter = $this->getLogFormatter();
+        $rowParser = function(string &$rowData, array &$data) use ($rowFormatter){
+            if( !empty($rowDataObj = (array)json_decode($rowData, true)) ){
+                $rowFormatter($rowDataObj);
+                $data[] = $rowDataObj;
+            }
+        };
+
+        return FileHandler::instance()->readFileReverse($streamConf->stream, $offset, $limit, $rowParser);
     }
 
     /**
@@ -1200,7 +1284,7 @@ class MapModel extends AbstractMapTrackingModel {
      * @param int $posY
      * @return false|ConnectionModel
      */
-    public function saveSystem( SystemModel $system, CharacterModel $character, $posX = 10, $posY = 0){
+    public function saveSystem(SystemModel $system, CharacterModel $character, $posX = 10, $posY = 0){
         $system->setActive(true);
         $system->mapId = $this->id;
         $system->posX = $posX;
@@ -1273,7 +1357,6 @@ class MapModel extends AbstractMapTrackingModel {
      * get all active characters (with active log)
      * grouped by systems
      * @return \stdClass
-     * @throws PathfinderException
      * @throws \Exception
      */
     public function getUserData(){
@@ -1306,7 +1389,6 @@ class MapModel extends AbstractMapTrackingModel {
 
             // check if a system has active characters
             foreach($activeUserCharactersData as $key => $activeUserCharacterData){
-
                 if(isset($activeUserCharacterData->log)){
                     // user as log data
                     if($activeUserCharacterData->log->system->id == $systemData->systemId){

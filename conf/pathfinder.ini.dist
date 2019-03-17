@@ -1,0 +1,21 @@
+; Use a copy of this file (without .dist) to overwrite Pathfinder configs
+
+[PATHFINDER]
+; Pathfinder version
+;           Version number should not be changed manually.
+;           Version is used for CSS/JS cache busting and is part of the URL for static resources:
+;           e.g. public/js/vX.X.X/app.js
+; Syntax:   String (current version)
+; Default:  v1.5.0
+VERSION                     =   v1.5.0-t
+
+; Show warning on 'login' page if /setup route is active
+;           DO NOT disable this warning unless /setup route is protected or commented in routes.ini
+; Syntax:   0 | 1
+; Default:  1
+SHOW_SETUP_WARNING          =   1
+
+[routes]
+; Disables /setup: Overwrite route with a redirect to @login
+; Commend out to ENABLE setup
+GET @setup:         /setup                      [sync]  =   Controller\AppController->rerouteToMe

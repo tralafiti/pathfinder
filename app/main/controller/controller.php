@@ -7,8 +7,12 @@
  */
 
 namespace Controller;
+
 use Controller\Api as Api;
+use Exception\PathfinderException;
+use lib\api\CcpClient;
 use lib\Config;
+use lib\Resource;
 use lib\Monolog;
 use lib\Socket;
 use lib\Util;
@@ -64,7 +68,6 @@ class Controller {
      * @param \Base $f3
      * @param $params
      * @return bool
-     * @throws \Exception\PathfinderException
      */
     function beforeroute(\Base $f3, $params): bool {
         // initiate DB connection
@@ -74,10 +77,14 @@ class Controller {
         $this->initSession($f3);
 
         if($f3->get('AJAX')){
-            header('Content-type: application/json');
+            header('Content-Type: application/json');
+
+            // send "maintenance" Header -> e.g. before server update
+            if($modeMaintenance = (int)Config::getPathfinderData('login.mode_maintenance')){
+                header('Pf-Maintenance: ' . $modeMaintenance);
+            }
         }else{
-            // js path (build/minified or raw uncompressed files)
-            $f3->set('tplPathJs', 'public/js/' . Config::getPathfinderData('version') );
+            $this->initResource($f3);
 
             $this->setTemplate( Config::getPathfinderData('view.index') );
         }
@@ -91,10 +98,16 @@ class Controller {
      * @param \Base $f3
      */
     public function afterroute(\Base $f3){
-        if($this->getTemplate()){
+        // send preload/prefetch headers
+        $resource = Resource::instance();
+        if($resource->getOption('output') === 'header'){
+            header($resource->buildHeader(), false);
+        }
+
+        if($file = $this->getTemplate()){
             // Ajax calls don´t need a page render..
             // this happens on client side
-            echo \Template::instance()->render( $this->getTemplate() );
+            echo \Template::instance()->render($file);
         }
     }
 
@@ -112,35 +125,62 @@ class Controller {
      * @param \Base $f3
      */
     protected function initSession(\Base $f3){
-        $sessionCacheKey = $f3->get('SESSION_CACHE');
         $session = null;
 
-        /**
-         * callback() for suspect sessions
-         * @param $session
-         * @param $sid
-         * @return bool
-         * @throws \Exception\PathfinderException
-         */
-        $onSuspect = function($session, $sid){
-            self::getLogger('SESSION_SUSPECT')->write( sprintf(
-                self::ERROR_SESSION_SUSPECT,
-                $sid,
-                $session->ip(),
-                $session->agent()
-            ));
-            // .. continue with default onSuspect() handler
-            // -> destroy session
-            return false;
-        };
-
         if(
-            $sessionCacheKey === 'mysql' &&
+            $f3->get('SESSION_CACHE') === 'mysql' &&
             $this->getDB('PF') instanceof DB\SQL
         ){
-            $session = new DB\SQL\Session($this->getDB('PF'), 'sessions', true, $onSuspect);
+            if(!headers_sent() && session_status()!=PHP_SESSION_ACTIVE){
+                /**
+                 * callback() for suspect sessions
+                 * @param $session
+                 * @param $sid
+                 * @return bool
+                 */
+                $onSuspect = function($session, $sid){
+                    self::getLogger('SESSION_SUSPECT')->write( sprintf(
+                        self::ERROR_SESSION_SUSPECT,
+                        $sid,
+                        $session->ip(),
+                        $session->agent()
+                    ));
+                    // .. continue with default onSuspect() handler
+                    // -> destroy session
+                    return false;
+                };
+
+                new DB\SQL\MySQL\Session($this->getDB('PF'), 'sessions', true, $onSuspect);
+            }
         }
 
+    }
+
+    /**
+     * init new Resource handler
+     * @param \Base $f3
+     */
+    protected function initResource(\Base $f3){
+        $resource = Resource::instance();
+        $resource->setOption('filePath', [
+            'style'     => $f3->get('BASE') . '/public/css/' . Config::getPathfinderData('version'),
+            'script'    => $f3->get('BASE') . '/public/js/' . Config::getPathfinderData('version'),
+            'font'      => $f3->get('BASE') . '/public/fonts',
+            'image'     => $f3->get('BASE') . '/public/img'
+        ]);
+
+        $resource->register('style', 'pathfinder');
+
+        $resource->register('script', 'lib/require');
+        $resource->register('script', 'app');
+
+        $resource->register('font', 'oxygen-regular-webfont');
+        $resource->register('font', 'oxygen-bold-webfont');
+        $resource->register('font', 'fa-regular-400');
+        $resource->register('font', 'fa-solid-900');
+        $resource->register('font', 'fa-brands-400');
+
+        $f3->set('tplResource', $resource);
     }
 
     /**
@@ -172,7 +212,7 @@ class Controller {
                         $data[$name] = $value;
                     }
                 }
-            }elseif( isset($cookieData[$cookieName]) ){
+            }elseif(isset($cookieData[$cookieName])){
                 // look for a single cookie
                 $data[$cookieName] = $cookieData[$cookieName];
             }
@@ -186,7 +226,6 @@ class Controller {
      * -> store validation data in DB
      * @param Model\CharacterModel $character
      * @throws \Exception
-     * @throws \Exception\PathfinderException
      */
     protected function setLoginCookie(Model\CharacterModel $character){
         if( $this->getCookieState() ){
@@ -244,7 +283,6 @@ class Controller {
      * @param bool $checkAuthorization
      * @return Model\CharacterModel[]
      * @throws \Exception
-     * @throws \Exception\PathfinderException
      */
     protected function getCookieCharacters($cookieData = [], $checkAuthorization = true){
         $characters = [];
@@ -447,15 +485,16 @@ class Controller {
 
     /**
      * log out current character or all active characters (multiple browser tabs)
+     * -> send response data to client
+     * @param \Base $f3
      * @param bool $all
      * @param bool $deleteSession
      * @param bool $deleteLog
      * @param bool $deleteCookie
-     * @throws \Exception
      * @throws \ZMQSocketException
      */
-    protected function logoutCharacter(bool $all = false, bool $deleteSession = true, bool $deleteLog = true, bool $deleteCookie = false){
-        $sessionCharacterData = (array)$this->getF3()->get(Api\User::SESSION_KEY_CHARACTERS);
+    protected function logoutCharacter(\Base $f3, bool $all = false, bool $deleteSession = true, bool $deleteLog = true, bool $deleteCookie = false){
+        $sessionCharacterData = (array)$f3->get(Api\User::SESSION_KEY_CHARACTERS);
 
         if($sessionCharacterData){
             $activeCharacterId = ($activeCharacter = $this->getCharacter()) ? $activeCharacter->_id : 0;
@@ -481,41 +520,109 @@ class Controller {
                 (new Socket( Config::getSocketUri() ))->sendData('characterLogout', $characterIds);
             }
         }
+
+        if($f3->get('AJAX')){
+            $status = 403;
+            $f3->status($status);
+
+            $return = (object) [];
+            $return->reroute = rtrim(self::getEnvironmentData('URL'), '/') . $f3->alias('login');
+            $return->error[] = $this->getErrorObject($status, Config::getMessageFromHTTPStatus($status));
+
+            echo json_encode($return);
+        }else{
+            // redirect to landing page
+            $f3->reroute(['login']);
+        }
     }
 
     /**
      * get EVE server status from ESI
      * @param \Base $f3
+     * @throws \Exception
      */
     public function getEveServerStatus(\Base $f3){
+        $esiStatusVersion = 'latest';
         $cacheKey = 'eve_server_status';
+
         if( !$f3->exists($cacheKey, $return) ){
             $return = (object) [];
             $return->error = [];
-            $return->status = [
-                'serverName' => strtoupper( self::getEnvironmentData('CCP_ESI_DATASOURCE') ),
-                'serviceStatus' => 'offline'
-            ];
 
-            $response = $f3->ccpClient->getServerStatus();
+            /**
+             * @var $client CcpClient
+             */
+            if($client = $f3->ccpClient()){
+                $return->server = [
+                    'name'              => strtoupper(self::getEnvironmentData('CCP_ESI_DATASOURCE')),
+                    'status'            => 'offline',
+                    'statusColor'       => 'red',
+                ];
+                $return->api = [
+                    'name'              => 'ESI API',
+                    'status'            => 'offline',
+                    'statusColor'       => 'red',
+                    'url'               => $client->getUrl(),
+                    'timeout'           => $client->getTimeout(),
+                    'connectTimeout'    => $client->getConnectTimeout(),
+                    'readTimeout'       => $client->getReadTimeout(),
+                    'proxy'             => ($proxy = $client->getProxy()) ? : 'false',
+                    'verify'            => $client->getVerify(),
+                    'debug'             => $client->getDebugRequests(),
+                    'dataSource'        => $client->getDataSource(),
+                    'statusVersion'     => $esiStatusVersion,
+                    'routes'            => []
+                ];
 
-            if( !empty($response) ){
-                // calculate time diff since last server restart
-                $timezone = $f3->get('getTimeZone')();
-                $dateNow = new \DateTime('now', $timezone);
-                $dateServerStart = new \DateTime($response['startTime']);
-                $interval = $dateNow->diff($dateServerStart);
-                $startTimestampFormat = $interval->format('%hh %im');
-                if($interval->days > 0){
-                    $startTimestampFormat = $interval->days . 'd ' . $startTimestampFormat;
+                $serverStatus = $client->getServerStatus();
+                if( !isset($serverStatus['error']) ){
+                    $statusData = $serverStatus['status'];
+                    // calculate time diff since last server restart
+                    $timezone = $f3->get('getTimeZone')();
+                    $dateNow = new \DateTime('now', $timezone);
+                    $dateServerStart = new \DateTime($statusData['startTime']);
+                    $interval = $dateNow->diff($dateServerStart);
+                    $startTimestampFormat = $interval->format('%hh %im');
+                    if($interval->days > 0){
+                        $startTimestampFormat = $interval->days . 'd ' . $startTimestampFormat;
+                    }
+
+                    $statusData['name']         = $return->server['name'];
+                    $statusData['status']       = 'online';
+                    $statusData['statusColor']  = 'green';
+                    $statusData['startTime']    = $startTimestampFormat;
+                    $return->server = $statusData;
+                }else{
+                    $return->error[] = (new PathfinderException($serverStatus['error'], 500))->getError();
                 }
 
-                $response['serverName'] = strtoupper( self::getEnvironmentData('CCP_ESI_DATASOURCE') );
-                $response['serviceStatus'] = 'online';
-                $response['startTime'] = $startTimestampFormat;
-                $return->status = $response;
+                $apiStatus = $client->getStatusForRoutes('latest');
+                if( !isset($apiStatus['error']) ){
+                    // find top status
+                    $status = 'OK';
+                    $color = 'green';
+                    foreach($apiStatus['status'] as $statusData){
+                        if('red' == $statusData['status']){
+                            $status = 'unstable';
+                            $color = $statusData['status'];
+                            break;
+                        }
+                        if('yellow' == $statusData['status']){
+                            $status = 'degraded';
+                            $color = $statusData['status'];
+                        }
+                    }
 
-                $f3->set($cacheKey, $return, 60);
+                    $return->api['status']      = $status;
+                    $return->api['statusColor'] = $color;
+                    $return->api['routes']      = $apiStatus['status'];
+                }else{
+                    $return->error[] = (new PathfinderException($apiStatus['error'], 500))->getError();
+                }
+
+                if(empty($return->error)){
+                    $f3->set($cacheKey, $return, 60);
+                }
             }
         }
 
@@ -585,7 +692,6 @@ class Controller {
     /**
      * get a custom userAgent string for API calls
      * @return string
-     * @throws \Exception\PathfinderException
      */
     protected function getUserAgent(){
         $userAgent = '';
@@ -598,23 +704,49 @@ class Controller {
     }
 
     /**
+     * print error information in CLI mode
+     * @param \stdClass $error
+     */
+    protected function echoErrorCLI(\stdClass $error){
+        echo '[' . date('H:i:s') . '] ───────────────────────────' . PHP_EOL;
+        foreach(get_object_vars($error) as $key => $value){
+            $row = str_pad(' ',2 ) . str_pad($key . ':',10 );
+            if($key == 'trace'){
+                $value = preg_replace("/\r\n|\r|\n/", "\n" . str_pad(' ',12 ), $value);
+                $row .= PHP_EOL . str_pad(' ',12 ) . $value;
+            }else{
+                $row .= $value;
+            }
+            echo $row . PHP_EOL;
+        }
+    }
+
+    /**
      * onError() callback function
      * -> on AJAX request -> return JSON with error information
      * -> on HTTP request -> render error page
      * @param \Base $f3
      * @return bool
-     * @throws \Exception\PathfinderException
      */
     public function showError(\Base $f3){
 
         if(!headers_sent()){
             // collect error info -------------------------------------------------------------------------------------
-            $error = $this->getErrorObject(
-                $f3->get('ERROR.code'),
-                $f3->get('ERROR.status'),
-                $f3->get('ERROR.text'),
-                $f3->get('DEBUG') === 3 ? $f3->get('ERROR.trace') : null
-            );
+            $errorData = $f3->get('ERROR');
+            $exception = $f3->get('EXCEPTION');
+
+            if($exception instanceof PathfinderException){
+                // ... handle Pathfinder exceptions (e.g. validation Exceptions,..)
+                $error = $exception->getError();
+            }else{
+                // ... handle error $f3->error() calls
+                $error = $this->getErrorObject(
+                    $errorData['code'],
+                    $errorData['status'],
+                    $errorData['text'],
+                    $f3->get('DEBUG') >= 1 ? $errorData['trace'] : null
+                );
+            }
 
             // check if error is a PDO Exception ----------------------------------------------------------------------
             if(strpos(strtolower( $f3->get('ERROR.text') ), 'duplicate') !== false){
@@ -631,7 +763,11 @@ class Controller {
                 $f3->status($error->code);
             }
 
-            if($f3->get('AJAX')){
+            if($f3->get('CLI')){
+                $this->echoErrorCLI($error);
+                // no further processing (no HTML output)
+                return false;
+            }elseif($f3->get('AJAX')){
                 $return = (object) [];
                 $return->error[] = $error;
                 echo json_encode($return);
@@ -661,24 +797,6 @@ class Controller {
      * @return bool
      */
     public function unload(\Base $f3){
-        // track some 4xx Client side errors
-        // 5xx errors are handled in "ONERROR" callback
-        $status = http_response_code();
-        if(!headers_sent() && $status >= 300){
-            if($f3->get('AJAX')){
-                $params = (array)$f3->get('POST');
-                $return = (object) [];
-                if((bool)$params['reroute']){
-                    $return->reroute = rtrim(self::getEnvironmentData('URL'), '/') . $f3->alias('login');
-                }else{
-                    // no reroute -> errors can be shown
-                    $return->error[] = $this->getErrorObject($status, Config::getMessageFromHTTPStatus($status));
-                }
-
-                echo json_encode($return);
-            }
-        }
-
         // store all user activities that are buffered for logging in this request
         // this should work even on non HTTP200 responses
         $this->logActivities();
@@ -731,9 +849,8 @@ class Controller {
      * @param string $authType
      * @return array
      */
-    static function getScopesByAuthType($authType = ''){
+    static function getScopesByAuthType(string $authType = '') : array {
         $scopes = array_filter((array)self::getEnvironmentData('CCP_ESI_SCOPES'));
-
         switch($authType){
             case 'admin':
                 $scopesAdmin = array_filter((array)self::getEnvironmentData('CCP_ESI_SCOPES_ADMIN'));
@@ -823,7 +940,6 @@ class Controller {
      * get the current registration status
      * 0=registration stop |1=new registration allowed
      * @return int
-     * @throws \Exception\PathfinderException
      */
     static function getRegistrationStatus(){
         return (int)Config::getPathfinderData('registration.status');
@@ -833,10 +949,9 @@ class Controller {
      * get a Logger object by Hive key
      * -> set in pathfinder.ini
      * @param string $type
-     * @return \Log|null
-     * @throws \Exception\PathfinderException
+     * @return \Log
      */
-    static function getLogger($type){
+    static function getLogger($type = 'DEBUG') : \Log {
         return LogController::getLogger($type);
     }
 

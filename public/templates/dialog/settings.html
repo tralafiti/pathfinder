@@ -16,7 +16,7 @@
                     </li>
                     <li>
                         <a role="tab" data-toggle="tab" data-name="share" href="#{{settingsCharacterContainerId}}">
-                            <i class="fas fa-male fa-fw"></i>&nbsp;Character
+                            <i class="fas fa-user-cog fa-fw"></i>&nbsp;Character
                         </a>
                     </li>
                 {{/userData.character}}
@@ -36,7 +36,7 @@
                             <label class="col-sm-3 control-label">Username</label>
                             <div class="col-sm-9">
                                 <p class="form-control-static">
-                                    <i class="fas fa-fw fa-lg fa-pencil-alt pull-right pf-dialog-icon-button collapsed" data-toggle="collapse" data-target="#collapseUsername" aria-expanded="false" aria-controls="collapseUsername"></i>
+                                    <i class="fas fa-fw fa-lg fa-pen pull-right pf-dialog-icon-button collapsed" data-toggle="collapse" data-target="#collapseUsername" aria-expanded="false" aria-controls="collapseUsername"></i>
                                     {{userData.name}}
                                 </p>
                             </div>
@@ -68,7 +68,7 @@
                             <label class="col-sm-3 control-label">Email</label>
                             <div class="col-sm-9">
                                 <p class="form-control-static">
-                                    <i class="fas fa-fw fa-lg fa-pencil-alt pull-right pf-dialog-icon-button collapsed" data-toggle="collapse" data-target="#collapseEmail" aria-expanded="false" aria-controls="collapseEmail"></i>
+                                    <i class="fas fa-fw fa-lg fa-pen pull-right pf-dialog-icon-button collapsed" data-toggle="collapse" data-target="#collapseEmail" aria-expanded="false" aria-controls="collapseEmail"></i>
                                     {{#userData.email}}
                                     {{userData.email}}
                                     {{/userData.email}}
@@ -227,17 +227,36 @@
                     <h4 class="pf-dynamic-area"><img src="{{ccpImageServer}}/Character/{{id}}_64.jpg">&nbsp;&nbsp;{{name}}&nbsp;&nbsp;{{{roleLabel}}}</h4>
 
                     <div class="row">
-                        <div class="col-xs-8 col-sm-6">
+                        <div class="col-xs-12 col-sm-6">
                             <div class="form-group">
                                 <div class="col-sm-offset-1 col-sm-11">
-                                    <div class="checkbox checkbox-primary" title="show/share current location on map">
+                                    <div class="checkbox checkbox-primary">
                                         <input id="logLocation" name="logLocation" value="1" type="checkbox" {{#logLocation}}checked{{/logLocation}}>
-                                        <label for="logLocation">Auto update current location</label>
+                                        <label for="logLocation">
+                                            Auto update current location
+                                            <i class="fas fa-fw fa-question-circle pf-help-light" title="show/share current location on map"></i>
+                                        </label>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-sm-6"></div>
+
+                        <div class="col-xs-12 col-sm-6">
+                            <div class="form-group">
+                                <div class="col-sm-12">
+                                    <div class="checkbox checkbox-warning" {{^characterAutoLocationSelectEnabled}}title="Globally disabled for all characters"{{/characterAutoLocationSelectEnabled}}>
+                                        <input id="selectLocation" name="selectLocation" value="1" type="checkbox" {{#selectLocation}}checked{{/selectLocation}} {{^characterAutoLocationSelectEnabled}}disabled{{/characterAutoLocationSelectEnabled}}>
+                                        <label for="selectLocation">
+                                            Auto select current location
+                                            <i class="fas fa-fw fa-question-circle pf-help-light" title="Auto select current system after jump.
+                                                Unsaved changes (e.g. system description) will be discarded!"
+                                            ></i>
+                                            <span class="badge bg-color bg-color-grayDarker txt-color txt-color-warning">beta</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <input type="hidden" name="character">

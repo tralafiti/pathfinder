@@ -1,0 +1,26 @@
+version: '3'
+
+services:
+  node:
+    container_name: ${COMPOSE_PROJECT_NAME}_node
+    build:
+      context: docker/node
+      args:
+        USER_ID: ${DOCKER_USER_ID}
+    volumes:
+      - .:/var/www/html:consistent
+
+  adminer:
+    container_name: ${COMPOSE_PROJECT_NAME}_adminer
+    image: adminer:4
+    networks:
+      - net
+    ports:
+      - ${EXPOSE_PORT_DEV_ADMINER}:8080
+    environment:
+      ADMINER_DESIGN: hever
+      ADMINER_PLUGINS: tables-filter
+      ADMINER_DEFAULT_SERVER: db
+
+networks:
+  net:

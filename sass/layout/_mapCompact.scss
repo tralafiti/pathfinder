@@ -1,0 +1,101 @@
+
+.pf-map.pf-compact {
+
+  .jsplumb-hover {
+    &:not(.jsplumb-overlay) {
+      animation: none;
+      -webkit-animation: none;
+    }
+  }
+
+  .jsplumb-target-hover, .jsplumb-source-hover {
+    animation: none;
+    -webkit-animation: none;
+  }
+
+  .pf-system {
+    min-width: 100px;
+
+    &:hover {
+      transform: none !important;
+      -webkit-transform: none !important;
+    }
+  }
+
+  .pf-system-head{
+    .pf-system-head-name{
+      min-width: unset;
+      width: 56px;
+      margin-bottom: -5px;
+      margin-right: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pf-system-head-name-short {
+      width: 42px;
+    }
+
+    .pf-system-head-name-long {
+      width: 68px;
+    }
+
+    .pf-system-head-info{
+      display: none;
+    }
+
+    .fas {
+      float: right;
+      margin-top: 4px;
+    }
+  }
+
+  .pf-system-body{
+    height: 18px;
+    padding: 1px 4px 0 4px;
+    font-size: 11px;
+    display: block;
+    will-change: initial;
+
+    .pf-system-body-item{
+      display: none;
+    }
+
+    .pf-system-body-pilots{
+      display: block; // overwrite default layout
+      height: 14px;
+      max-width: 88px;
+      float: left;
+      color: darken($gray-lighter, 15%);
+      transition: color 0.3s ease-out;
+      cursor: help;
+      overflow: hidden;
+      text-overflow: ellipsis;
+
+      i {
+        margin-right: 4px;
+      }
+      i.pilots {
+        font-size: 6px;
+        vertical-align: middle;
+      }
+    }
+
+    .pf-system-body-pilots-increase{
+      color: $green-dark;
+    }
+
+    .pf-system-body-pilots-decrease{
+      color: $red;
+    }
+
+    .pf-system-body-static{
+      display: block; // overwrite default layout
+      float: right;
+      margin-left: 4px;
+      opacity: 0.7;
+      cursor: help;
+    }
+  }
+
+}

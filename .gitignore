@@ -49,9 +49,11 @@ Temporary Items
 .idea
 .sass-cache
 .usage
+.env
 *.gz
 *.lock
-/conf/
+!composer.lock
+/conf/*.ini
 /node_modules/
 /public/js/vX.X.X/
 /vendor/

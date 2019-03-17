@@ -7,7 +7,7 @@ define([
     'app/init',
     'app/util',
     'app/map/util'
-], function($, Init, Util, MapUtil) {
+], ($, Init, Util, MapUtil) => {
     'use strict';
 
     let config = {
@@ -43,7 +43,7 @@ define([
      * @param mapElement
      * @returns {*}
      */
-    let getMapObjectFromMapElement = (mapElement) => {
+    let getMapObjectFromMapElement = mapElement => {
         let Map = require('app/map/map');
         return Map.getMapInstance( mapElement.data('id') );
     };
@@ -53,7 +53,7 @@ define([
      * @param overlayIcon
      * @returns {*}
      */
-    let getMapObjectFromOverlayIcon = (overlayIcon) => {
+    let getMapObjectFromOverlayIcon = overlayIcon => {
         let mapElement = Util.getMapElementFromOverlay(overlayIcon);
 
         return getMapObjectFromMapElement( mapElement );
@@ -65,7 +65,7 @@ define([
      * @param connectionsData
      */
     let addConnectionsOverlay = (connections, connectionsData) => {
-        let SystemSignatures = require('app/ui/system_signature');
+        let SystemSignatures = require('app/ui/module/system_signature');
 
         /**
          *  add label to endpoint
@@ -85,7 +85,7 @@ define([
         };
 
         // loop through all map connections (get from DOM)
-        for(let connection of connections) {
+        for(let connection of connections){
             let connectionId        = connection.getParameter('connectionId');
             let sourceEndpoint      = connection.endpoints[0];
             let targetEndpoint      = connection.endpoints[1];
@@ -173,7 +173,7 @@ define([
      * @param parts
      * @returns {string}
      */
-    let formatTimeParts = (parts) => {
+    let formatTimeParts = parts => {
         let label = '';
         if(parts.days){
             label += parts.days + 'd ';
@@ -187,7 +187,7 @@ define([
      * hide default icon and replace it with "loading" icon
      * @param iconElement
      */
-    let showLoading = (iconElement) => {
+    let showLoading = iconElement => {
         iconElement = $(iconElement);
         let dataName = 'default-icon';
         let defaultIconClass = iconElement.data(dataName);
@@ -199,19 +199,19 @@ define([
             iconElement.data(dataName, defaultIconClass);
         }
 
-        iconElement.toggleClass( defaultIconClass + ' fa-sync fa-spin' );
+        iconElement.toggleClass( defaultIconClass + ' fa-sync fa-spin');
     };
 
     /**
      * hide "loading" icon and replace with default icon
      * @param iconElement
      */
-    let hideLoading = (iconElement) => {
+    let hideLoading = iconElement => {
         iconElement = $(iconElement);
         let dataName = 'default-icon';
         let defaultIconClass = iconElement.data(dataName);
 
-        iconElement.toggleClass( defaultIconClass + ' fa-sync fa-spin' );
+        iconElement.toggleClass( defaultIconClass + ' fa-sync fa-spin');
     };
 
     /**
@@ -247,7 +247,7 @@ define([
             this.mapElement.hideEndpointOverlays();
             // ... add overlays
             callback(this.connections, connectionsData);
-        }).always(function() {
+        }).always(function(){
             hideLoading(this.overlayConnectionIcon);
         });
     };
@@ -260,7 +260,7 @@ define([
         let mapElement = $(this);
         let map = getMapObjectFromMapElement(mapElement);
         let MapUtil = require('app/map/util');
-        let connections = MapUtil.searchConnectionsByScopeAndType(map, 'wh');
+        let connections = MapUtil.searchConnectionsByScopeAndType(map, 'wh', undefined, true);
 
         // get connection signature information ---------------------------------------
         getConnectionSignatureData(mapElement, connections, addConnectionsOverlay);
@@ -275,7 +275,7 @@ define([
         let MapUtil = require('app/map/util');
         let connections = MapUtil.searchConnectionsByScopeAndType(map, 'wh');
 
-        for (let connection of connections){
+        for(let connection of connections){
             connection.removeOverlays(config.connectionOverlayArrowId);
             connection.endpoints.forEach(removeEndpointOverlay);
         }
@@ -293,13 +293,21 @@ define([
             title: 'active filter',
             trigger: 'active',
             class: 'pf-map-overlay-filter',
-            iconClass: ['fas', 'fa-fw', 'fa-filter']
+            iconClass: ['fas', 'fa-fw', 'fa-filter'],
+            onClick: function(e){
+                // clear all filter
+                let mapElement = Util.getMapElementFromOverlay(this);
+                let map = getMapObjectFromOverlayIcon(this);
+
+                MapUtil.storeLocalData('map', mapElement.data('id'), 'filterScopes', []);
+                MapUtil.filterMapByScopes(map, []);
+            }
         },
         mapSnapToGrid: {
             title: 'active grid',
             trigger: 'active',
             class: 'pf-map-overlay-grid',
-            iconClass: ['glyphicon', 'glyphicon-th']
+            iconClass: ['fas', 'fa-fw', 'fa-th']
         },
         mapMagnetizer: {
             title: 'active magnetizer',
@@ -318,7 +326,7 @@ define([
                     mapElement.find('.' + config.systemHeadClass).each(function(){
                         let system = $(this);
                         // init tooltip if not already exists
-                        if ( !system.data('bs.tooltip') ){
+                        if( !system.data('bs.tooltip') ){
                             system.tooltip({
                                 container: mapElement,
                                 placement: 'right',
@@ -352,6 +360,12 @@ define([
                 }
             }
         },
+        mapCompact: {
+            title: 'Fixed Size Systems layout',
+            trigger: 'active',
+            class: 'pf-map-overlay-compact',
+            iconClass: ['fas', 'fa-fw', 'fa-compress']
+        },
         connection: {
             title: 'WH data',
             trigger: 'hover',
@@ -365,7 +379,7 @@ define([
                     let serverDate = Util.getServerTime();
 
                     // show connection overlays ---------------------------------------------------
-                    for (let connection of connections) {
+                    for(let connection of connections){
                         let createdTimestamp = connection.getParameter('created');
                         let updatedTimestamp = connection.getParameter('updated');
 
@@ -398,7 +412,7 @@ define([
                     let MapUtil = require('app/map/util');
                     let connections = MapUtil.searchConnectionsByScopeAndType(map, 'wh');
 
-                    for (let connection of connections){
+                    for(let connection of connections){
                         connection.removeOverlays(config.connectionOverlayId);
                     }
                 }
@@ -416,7 +430,7 @@ define([
                     let connections = MapUtil.searchConnectionsByScopeAndType(map, 'wh', ['wh_eol']);
                     let serverDate = Util.getServerTime();
 
-                    for (let connection of connections) {
+                    for(let connection of connections){
                         let eolTimestamp = connection.getParameter('eolUpdated');
                         let eolDate = Util.convertTimestampToServerTime(eolTimestamp);
                         let diff = Util.getTimeDiffParts(eolDate, serverDate);
@@ -437,7 +451,7 @@ define([
                     let MapUtil = require('app/map/util');
                     let connections = MapUtil.searchConnectionsByScopeAndType(map, 'wh', ['wh_eol']);
 
-                    for (let connection of connections) {
+                    for(let connection of connections){
                         connection.removeOverlay(config.connectionOverlayEolId);
                     }
                 }
@@ -639,8 +653,12 @@ define([
                     iconElement.data('visible', true);
                 }
             }else if(viewType === 'hide'){
-                iconElement.removeClass('active').velocity('reverse');
-                iconElement.data('visible', false);
+                // check if icon is not already visible
+                // -> prevents unnecessary "hide" animation
+                if(iconElement.data('visible')){
+                    iconElement.removeClass('active').velocity('reverse');
+                    iconElement.data('visible', false);
+                }
 
                 // check if there is any visible icon remaining
                 let visibleIcons = mapOverlayInfo.find('i:visible');
@@ -686,7 +704,7 @@ define([
             });
 
             // add all overlay elements
-            for (let prop in options) {
+            for(let prop in options){
                 if(options.hasOwnProperty(prop)){
                     let icon = $('<i>', {
                         class: options[prop].iconClass.concat( ['pull-right', options[prop].class] ).join(' ')
@@ -702,6 +720,11 @@ define([
                         options[prop].trigger === 'refresh'
                     ){
                         icon.hoverIntent(options[prop].hoverIntent);
+                    }
+
+                    // add "click" handler for some icons
+                    if(options[prop].hasOwnProperty('onClick')){
+                        icon.on('click', options[prop].onClick);
                     }
 
                     mapOverlayInfo.append(icon);

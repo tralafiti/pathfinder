@@ -9,6 +9,7 @@ define(['jquery'], ($) => {
     let Config = {
         path: {
             img: '/public/img/',                                            // path for images
+            api: '/api/rest',                                               //ajax URL - REST API
             // user API
             getCaptcha: '/api/user/getCaptcha',                             // ajax URL - get captcha image
             getServerStatus: '/api/user/getEveServerStatus',                // ajax URL - get EVE-Online server status
@@ -33,32 +34,34 @@ define(['jquery'], ($) => {
             getMapConnectionData: '/api/map/getConnectionData',             // ajax URL - get connection data
             getMapLogData: '/api/map/getLogData',                           // ajax URL - get logs data
             // system API
-            searchSystem: '/api/system/search',                             // ajax URL - search system by name
-            saveSystem: '/api/system/save',                                 // ajax URL - saves system to map
-            deleteSystem: '/api/system/delete',                             // ajax URL - delete system from map
+            getSystemData: '/api/system/getData',                           // ajax URL - get system data
             getSystemGraphData: '/api/system/graphData',                    // ajax URL - get all system graph data
-            getConstellationData: '/api/system/constellationData',          // ajax URL - get system constellation data
             setDestination: '/api/system/setDestination',                   // ajax URL - set destination
             pokeRally: '/api/system/pokeRally',                             // ajax URL - send rally point pokes
-            // connection API
-            saveConnection: '/api/connection/save',                         // ajax URL - save new connection to map
-            deleteConnection: '/api/connection/delete',                     // ajax URL - delete connection from map
             // signature API
-            getSignatures: '/api/signature/getAll',                         // ajax URL - get all signature data for system
             saveSignatureData: '/api/signature/save',                       // ajax URL - save signature data for system
             deleteSignatureData: '/api/signature/delete',                   // ajax URL - delete signature data for system
+            // structure API
+            saveStructureData: '/api/structure/save',                       // ajax URL - save structure data
+            deleteStructureData: '/api/structure/delete',                   // ajax URL - delete structure data
             // route API
             searchRoute: '/api/route/search',                               // ajax URL - search system routes
             // stats API
             getStatisticsData: '/api/statistic/getData',                    // ajax URL - get statistics data (activity log)
+            // universe API
+            searchUniverseData: '/api/universe/search',                     // ajax URL - search universe data by category Ids
+            searchUniverseSystemData: '/api/universe/systems',              // ajax URL - search universe system data by name
+            getConstellationData: '/api/universe/constellationData',        // ajax URL - get system constellation data
             // GitHub API
             gitHubReleases: '/api/github/releases'                          // ajax URL - get release info from GitHub
         },
         breakpoints: [
-            { name: 'desktop', width: Infinity },
-            { name: 'tablet',  width: 1200 },
-            { name: 'fablet',  width: 780 },
-            { name: 'phone',   width: 480 }
+            { name: 'screen-xl', width: Infinity },
+            { name: 'screen-l', width: 1600 },
+            { name: 'screen-m', width: 1200 },
+            { name: 'screen-d', width: 1000 },
+            { name: 'screen-s', width: 780 },
+            { name: 'screen-xs', width: 480 }
         ],
         animationSpeed: {
             splashOverlay: 300,                                             // "splash" loading overlay
@@ -108,6 +111,10 @@ define(['jquery'], ($) => {
                 label: 'anchor',
                 unicode: '&#xf13d;'
             },{
+                class: 'fa-fire',
+                label: 'fire',
+                unicode: '&#xf06d;'
+            },{
                 class: 'fa-bookmark',
                 label: 'bookmark',
                 unicode: '&#xf02e;'
@@ -139,6 +146,10 @@ define(['jquery'], ($) => {
                 class: 'fa-heart',
                 label: 'heart',
                 unicode: '&#xf004;'
+            },{
+                class: 'fa-poop',
+                label: 'poop',
+                unicode: '&#xf619;'
             }
         ],
 
@@ -191,8 +202,11 @@ define(['jquery'], ($) => {
             },
             // system security
             systemSecurity: {
-                security: {
+                'security': {
                     class: 'pf-system-sec'
+                },
+                'A': {
+                    class: 'pf-system-sec-abyssal'
                 },
                 'SH': {
                     class: 'pf-system-sec-unknown'
@@ -206,23 +220,26 @@ define(['jquery'], ($) => {
                 '0.0': {
                     class: 'pf-system-sec-nullSec'
                 },
-                'C6': {
-                    class: 'pf-system-sec-high'
-                },
-                'C5': {
-                    class: 'pf-system-sec-high'
-                },
-                'C4': {
-                    class: 'pf-system-sec-mid'
-                },
-                'C3': {
-                    class: 'pf-system-sec-mid'
+                'C1': {
+                    class: 'pf-system-sec-low'
                 },
                 'C2': {
                     class: 'pf-system-sec-low'
                 },
-                'C1': {
-                    class: 'pf-system-sec-low'
+                'C3': {
+                    class: 'pf-system-sec-mid'
+                },
+                'C4': {
+                    class: 'pf-system-sec-mid'
+                },
+                'C5': {
+                    class: 'pf-system-sec-high'
+                },
+                'C6': {
+                    class: 'pf-system-sec-high'
+                },
+                'C12': {
+                    class: 'pf-system-sec-special'
                 }
             },
             // true sec
@@ -268,6 +285,36 @@ define(['jquery'], ($) => {
                     label: 'rally point'
                 }
             },
+            // planets
+            planets: {
+                barren: {
+                    class: 'pf-planet-barren'
+                },
+                gas: {
+                    class: 'pf-planet-gas'
+                },
+                ice: {
+                    class: 'pf-planet-ice'
+                },
+                lava: {
+                    class: 'pf-planet-lava'
+                },
+                oceanic: {
+                    class: 'pf-planet-oceanic'
+                },
+                plasma: {
+                    class: 'pf-planet-plasma'
+                },
+                shattered: {
+                    class: 'pf-planet-shattered'
+                },
+                storm: {
+                    class: 'pf-planet-storm'
+                },
+                temperate: {
+                    class: 'pf-planet-temperate'
+                }
+            },
             // easy-pie-charts
             pieChart: {
                 class: 'pf-pie-chart',                                      // class for all pie charts
@@ -278,6 +325,12 @@ define(['jquery'], ($) => {
         defaultMapScope: 'wh',                                              // default scope for connection
         // map connection types
         connectionTypes: {
+            abyssal: {
+                cssClass: 'pf-map-connection-abyssal',
+                paintStyle: {
+                    dashstyle: '0.5 2' // dotted line
+                }
+            },
             jumpbridge: {
                 cssClass: 'pf-map-connection-jumpbridge',
                 paintStyle: {
@@ -384,7 +437,7 @@ define(['jquery'], ($) => {
                 5: 'C008 - C5',
                 6: 'G008 - C6',
                 7: 'Q003 - 0.0',
-                8: 'A009 - (shattered)'
+                8: 'A009 - C13'
             },
             2: {    // C2
                 1: 'E004 - C1',
@@ -394,7 +447,7 @@ define(['jquery'], ($) => {
                 5: 'C008 - C5',
                 6: 'G008 - C6',
                 7: 'Q003 - 0.0',
-                8: 'A009 - (shattered)'
+                8: 'A009 - C13'
             },
             3: {    // C3
                 1: 'E004 - C1',
@@ -404,7 +457,7 @@ define(['jquery'], ($) => {
                 5: 'C008 - C5',
                 6: 'G008 - C6',
                 7: 'Q003 - 0.0',
-                8: 'A009 - (shattered)'
+                8: 'A009 - C13'
             },
             4: {    // C4
                 1: 'E004 - C1',
@@ -414,7 +467,7 @@ define(['jquery'], ($) => {
                 5: 'C008 - C5',
                 6: 'G008 - C6',
                 7: 'Q003 - 0.0',
-                8: 'A009 - (shattered)'
+                8: 'A009 - C13'
             },
             5: {    // C5
                 1: 'E004 - C1',
@@ -424,7 +477,7 @@ define(['jquery'], ($) => {
                 5: 'C008 - C5',
                 6: 'G008 - C6',
                 7: 'Q003 - 0.0',
-                8: 'A009 - (shattered)'
+                8: 'A009 - C13'
             },
             6: {    // C6
                 1: 'E004 - C1',
@@ -434,7 +487,7 @@ define(['jquery'], ($) => {
                 5: 'C008 - C5',
                 6: 'G008 - C6',
                 7: 'Q003 - 0.0',
-                8: 'A009 - (shattered)'
+                8: 'A009 - C13'
             },
             13: {   // Shattered Wormholes (some of them are static)
                 1: 'E004 - C1',
@@ -444,7 +497,37 @@ define(['jquery'], ($) => {
                 5: 'C008 - C5',
                 6: 'G008 - C6',
                 7: 'Q003 - 0.0',
-                8: 'A009 - (shattered)'
+                8: 'A009 - C13'
+            },
+            30: {   // High Sec
+                1: 'E004 - C1',
+                2: 'L005 - C2',
+                3: 'Z006 - C3',
+                4: 'M001 - C4',
+                5: 'C008 - C5',
+                6: 'G008 - C6',
+                7: 'Q003 - 0.0',
+                8: 'A009 - C13'
+            },
+            31: {   // Low Sec
+                1: 'E004 - C1',
+                2: 'L005 - C2',
+                3: 'Z006 - C3',
+                4: 'M001 - C4',
+                5: 'C008 - C5',
+                6: 'G008 - C6',
+                7: 'Q003 - 0.0',
+                8: 'A009 - C13'
+            },
+            32: {   // 0.0
+                1: 'E004 - C1',
+                2: 'L005 - C2',
+                3: 'Z006 - C3',
+                4: 'M001 - C4',
+                5: 'C008 - C5',
+                6: 'G008 - C6',
+                7: 'Q003 - 0.0',
+                8: 'A009 - C13'
             }
         },
         // incoming wormholes
@@ -452,10 +535,10 @@ define(['jquery'], ($) => {
             1: 'K162 - C1/2/3 (unknown)',
             2: 'K162 - C4/5 (dangerous)',
             3: 'K162 - C6 (deadly)',
-            4: 'K162 - HS',
-            5: 'K162 - LS',
+            4: 'K162 - H',
+            5: 'K162 - L',
             6: 'K162 - 0.0',
-            7: 'K162 - Thera'
+            7: 'K162 - C12 Thera'
         }
 
     };

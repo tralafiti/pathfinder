@@ -19,13 +19,17 @@ define([
         mapLocalStoragePrefix: 'map_',                                  // prefix for map data local storage key
         mapTabContentClass: 'pf-map-tab-content',                       // Tab-Content element (parent element)
 
+        mapWrapperClass: 'pf-map-wrapper',                              // wrapper div (scrollable)
+
         mapClass: 'pf-map',                                             // class for all maps
         mapGridClass: 'pf-grid-small',                                  // class for map grid snapping
+        mapCompactClass: 'pf-compact',                                  // class for map compact system UI
 
         systemIdPrefix: 'pf-system-',                                   // id prefix for a system
         systemClass: 'pf-system',                                       // class for all systems
         systemActiveClass: 'pf-system-active',                          // class for an active system on a map
         systemSelectedClass: 'pf-system-selected',                      // class for selected systems on on map
+        systemHiddenClass: 'pf-system-hidden',                          // class for hidden (filtered) systems
 
         // dataTable
         tableCellEllipsisClass: 'pf-table-cell-ellipsis',
@@ -52,6 +56,11 @@ define([
             description: 'Endpoint overlay',
             onEnable: 'showEndpointOverlays',                           // jQuery extension function
             onDisable: 'hideEndpointOverlays'                           // jQuery extension function
+        },
+        mapCompact : {
+            buttonId: Util.config.menuButtonCompactId,
+            description: 'Compact system layout',
+            class: 'mapCompactClass'
         }
     };
 
@@ -112,7 +121,7 @@ define([
 
             for(let i = 0; i < checkMapTypes.length; i++){
                 let objectId = Util.getCurrentUserInfo(checkMapTypes[i] + 'Id');
-                if(objectId > 0) {
+                if(objectId > 0){
                     // check if User could add new map with a mapType
                     let currentObjectMapData = Util.filterCurrentMapData('config.type.id', Util.getObjVal(mapTypes, checkMapTypes[i] + '.id'));
                     let maxCountObject = Util.getObjVal(mapTypes, checkMapTypes[i] + '.defaultConfig.max_count');
@@ -122,7 +131,7 @@ define([
                 }
             }
 
-            for(let mapType in mapTypes) {
+            for(let mapType in mapTypes){
                 if(authorizedMapTypes.indexOf(mapType) < 0){
                     delete( mapTypes[mapType] );
                 }
@@ -342,6 +351,67 @@ define([
     };
 
     /**
+     * delete a connection and all related data
+     * @param connections
+     * @param callback
+     */
+    let deleteConnections = (connections, callback) => {
+        if(connections.length > 0){
+
+            // remove connections from map
+            let removeConnections = connections => {
+                for(let connection of connections){
+                    connection._jsPlumb.instance.detach(connection, {fireEvent: false});
+                }
+            };
+
+            // prepare delete request
+            let map = connections[0]._jsPlumb.instance;
+            let mapContainer = $(map.getContainer());
+
+            // connectionIds for delete request
+            let connectionIds = [];
+            for(let connection of connections){
+                let connectionId = connection.getParameter('connectionId');
+                // drag&drop a new connection does not have an id yet, if connection is not established correct
+                if(connectionId !== undefined){
+                    connectionIds.push(connectionId);
+                }
+            }
+
+            if(connectionIds.length > 0){
+                Util.request('DELETE', 'connection', connectionIds, {
+                    mapId: mapContainer.data('id')
+                }, {
+                    connections: connections
+                }).then(
+                    payload => {
+                        // check if all connections were deleted that should get deleted
+                        let deletedConnections = payload.context.connections.filter(
+                            function(connection){
+                                // if a connection is manually (drag&drop) detached, the jsPlumb instance does not exist any more
+                                // connection is already deleted!
+                                return (
+                                    connection._jsPlumb &&
+                                    this.indexOf( connection.getParameter('connectionId') ) !== -1
+                                );
+                            }, payload.data
+                        );
+
+                        // remove connections from map
+                        removeConnections(deletedConnections);
+
+                        if(callback){
+                            callback();
+                        }
+                    },
+                    Util.handleAjaxErrorResponse
+                );
+            }
+        }
+    };
+
+    /**
      * get connection related data from a connection
      * -> data requires a signature bind to that connection
      * @param connection
@@ -358,7 +428,7 @@ define([
             connection &&
             connectionData.signatures   // signature data is required...
         ){
-            let SystemSignatures = require('app/ui/system_signature');
+            let SystemSignatures = require('app/ui/module/system_signature');
 
             let connectionId        = connection.getParameter('connectionId');
             let sourceEndpoint      = connection.endpoints[0];
@@ -412,7 +482,7 @@ define([
      * @param label
      * @returns {string}
      */
-    let getEndpointOverlayContent = (label) => {
+    let getEndpointOverlayContent = label => {
         let newLabel = '';
         let colorClass = 'txt-color-grayLighter';
 
@@ -438,19 +508,100 @@ define([
      * @param element
      * @returns {*}
      */
-    let getTabContentElementByMapElement = (element) => {
-        let tabContentElement = $(element).parents('.' + config.mapTabContentClass);
-        return tabContentElement;
-    };
+    let getTabContentElementByMapElement = element => $(element).closest('.' + config.mapTabContentClass);
 
     /**
      * checks if there is an "active" connection on a map
      * @param map
      * @returns {boolean}
      */
-    let hasActiveConnection = (map) => {
+    let hasActiveConnection = map => {
         let activeConnections = getConnectionsByType(map, 'active');
         return activeConnections.length > 0;
+    };
+
+    /**
+     * filter map by scopes
+     * -> this effects visible systems and connections on UI
+     * @param map
+     * @param scopes
+     */
+    let filterMapByScopes = (map, scopes) => {
+        if(map){
+            // TODO ^^sometimes map is undefined -> bug
+            let mapElement = $(map.getContainer());
+            let allSystems = mapElement.getSystems();
+            let allConnections = map.getAllConnections();
+
+            if(scopes && scopes.length){
+                // filter connections -------------------------------------------------------------------------------------
+                let visibleSystems = [];
+                let visibleConnections = searchConnectionsByScopeAndType(map, scopes);
+
+                for(let connection of allConnections){
+                    if(visibleConnections.indexOf(connection) >= 0){
+                        setConnectionVisible(connection, true);
+                        // source/target system should always be visible -> even if filter scope not matches system type
+                        if(visibleSystems.indexOf(connection.endpoints[0].element) < 0){
+                            visibleSystems.push(connection.endpoints[0].element);
+                        }
+                        if(visibleSystems.indexOf(connection.endpoints[1].element) < 0){
+                            visibleSystems.push(connection.endpoints[1].element);
+                        }
+                    }else{
+                        setConnectionVisible(connection, false);
+                    }
+                }
+
+                // filter systems -----------------------------------------------------------------------------------------
+                let visibleTypeIds = [];
+                if(scopes.indexOf('wh') >= 0){
+                    visibleTypeIds.push(1);
+                }
+                if(scopes.indexOf('abyssal') >= 0){
+                    visibleTypeIds.push(4);
+                }
+
+                for(let system of allSystems){
+                    if(
+                        visibleTypeIds.indexOf($(system).data('typeId')) >= 0 ||
+                        visibleSystems.indexOf(system) >= 0
+                    ){
+                        setSystemVisible(system, map, true);
+                    }else{
+                        setSystemVisible(system, map, false);
+                    }
+                }
+
+                mapElement.getMapOverlay('info').updateOverlayIcon('filter', 'show');
+            }else{
+                // clear filter
+                for(let system of allSystems){
+                    setSystemVisible(system, map, true);
+                }
+                for(let connection of allConnections){
+                    setConnectionVisible(connection, true);
+                }
+
+                mapElement.getMapOverlay('info').updateOverlayIcon('filter', 'hide');
+            }
+        }
+    };
+
+    /**
+     * mark system as "selected" e.g. for dragging
+     * @param map
+     * @param system
+     * @param select
+     */
+    let setSystemSelect = (map, system, select) => {
+        if(select){
+            system.addClass(config.systemSelectedClass);
+            map.addToDragSelection(system);
+        }else{
+            system.removeClass(config.systemSelectedClass);
+            map.removeFromDragSelection(system);
+        }
     };
 
     /**
@@ -465,10 +616,33 @@ define([
 
         // set current system active
         system.addClass(config.systemActiveClass);
+
+        // collect all required data from map module to update the info element
+        // store them global and assessable for each module
+        Util.setCurrentSystemData({
+            systemData: system.getSystemData(),
+            mapId: parseInt( system.attr('data-mapid') )
+        });
+    };
+
+    /**
+     * set system visibility e.g. or filtered systems
+     * @param system
+     * @param map
+     * @param visible
+     */
+    let setSystemVisible = (system, map, visible) => {
+        system = $(system);
+        if(!visible){
+            // invisible systems should no longer be selected
+            setSystemSelect(map, system, false);
+        }
+        system.toggleClass(config.systemHiddenClass, !visible);
     };
 
     /**
      * mark a connection as "active"
+     * @param map
      * @param connections
      */
     let setConnectionsActive = (map, connections) => {
@@ -483,21 +657,29 @@ define([
     };
 
     /**
+     * set connection visibility e.g. for filtered systems
+     * @param connection
+     * @param visible
+     */
+    let setConnectionVisible = (connection, visible) => {
+        for(let endpoint of connection.endpoints){
+            endpoint.setVisible(visible);
+        }
+    };
+
+    /**
      * toggle "selected" status of system
      * @param map
      * @param systems
      */
-    let toggleSelectSystem = (map, systems) => {
+    let toggleSystemsSelect = (map, systems) => {
         for(let system of systems){
             system = $(system);
-            if( system.data('locked') !== true ){
-                if( system.hasClass( config.systemSelectedClass ) ){
-                    system.removeClass( config.systemSelectedClass );
-
-                    map.removeFromDragSelection(system);
+            if(system.data('locked') !== true){
+                if(system.hasClass(config.systemSelectedClass)){
+                    setSystemSelect(map, system, false);
                 }else{
-                    system.addClass( config.systemSelectedClass );
-                    map.addToDragSelection(system);
+                    setSystemSelect(map, system, true);
                 }
             }
         }
@@ -532,16 +714,7 @@ define([
         setSystemActive(map, system);
 
         // get parent Tab Content and fire update event
-        let tabContentElement = getTabContentElementByMapElement( system );
-
-        // collect all required data from map module to update the info element
-        // store them global and assessable for each module
-        Util.setCurrentSystemData({
-            systemData: system.getSystemData(),
-            mapId: parseInt( system.attr('data-mapid') )
-        });
-
-        $(tabContentElement).trigger('pf:drawSystemModules');
+        getTabContentElementByMapElement(system).trigger('pf:drawSystemModules');
     };
 
     /**
@@ -554,9 +727,8 @@ define([
 
         // get parent Tab Content and fire update event
         let mapContainer = $(map.getContainer());
-        let tabContentElement = getTabContentElementByMapElement(mapContainer);
 
-        $(tabContentElement).trigger('pf:drawConnectionModules', {
+        getTabContentElementByMapElement(mapContainer).trigger('pf:drawConnectionModules', {
             connections: connections,
             mapId: parseInt(mapContainer.data('id'))
         });
@@ -575,6 +747,33 @@ define([
         $(document).trigger('pf:updateConnectionInfoModule', {
             connectionsUpdate: selectedConnections,
             connectionsRemove: deselectedConnections,
+            mapId: parseInt(mapContainer.data('id'))
+        });
+    };
+
+    /**
+     * show "find route" dialog -> trigger route panel
+     * @param mapContainer
+     * @param systemToData
+     */
+    let showFindRouteDialog = (mapContainer, systemToData) => {
+        // get parent Tab Content and fire update event
+        getTabContentElementByMapElement(mapContainer).trigger('pf:updateRouteModules', {
+            task: 'showFindRouteDialog',
+            systemToData: systemToData,
+            mapId: parseInt(mapContainer.data('id'))
+        });
+    };
+
+    /**
+     * performs a new route search -> trigger route panel
+     * @param mapContainer
+     * @param systemToData
+     */
+    let findRoute = (mapContainer, systemToData) => {
+        getTabContentElementByMapElement(mapContainer).trigger('pf:updateRouteModules', {
+            task: 'findRoute',
+            systemToData: systemToData,
             mapId: parseInt(mapContainer.data('id'))
         });
     };
@@ -604,17 +803,23 @@ define([
     /**
      * search connections by scope and/or type
      * -> scope and target can be an array
-     * @param {Object} map - jsPlumb
-     * @param {string|string[]} scope
-     * @param {string|string[]} type
+     * @param map
+     * @param scope
+     * @param type
+     * @param noHidden
      * @returns {Array}
      */
-    let searchConnectionsByScopeAndType = (map, scope, type) => {
+    let searchConnectionsByScopeAndType = (map, scope, type = undefined, noHidden = false) => {
         let connections = [];
         let scopeArray = (scope === undefined) ? ['*'] : ((Array.isArray(scope)) ? scope : [scope]);
         let typeArray = (type === undefined) ? [] : ((Array.isArray(type)) ? type : [type]);
 
         map.select({scope: scopeArray}).each(function(connection){
+            if(noHidden && !connection.isVisible()){
+                // exclude invisible connection
+                return;
+            }
+
             if(typeArray.length > 0){
                 // filter by connection type as well...
                 for(let i = 0; i < typeArray.length; i++){
@@ -692,6 +897,9 @@ define([
             case'stargate':
                 type = 'stargate';
                 break;
+            case'abyssal':
+                type = 'abyssal';
+                break;
             default:
                 console.error('Connection scope "' + scope + '" unknown!');
         }
@@ -764,17 +972,18 @@ define([
     };
 
     /**
-     * store mapId for current user (IndexedDB)
-     * @param mapId
+     * store local data for current user (IndexDB)
+     * @param key
+     * @param value
      */
-    let storeDefaultMapId = (mapId) => {
-        if(mapId > 0){
+    let storeLocaleCharacterData = (key, value) => {
+        if(key.length && value){
             let userData = Util.getCurrentUserData();
             if(
                 userData &&
                 userData.character
             ){
-                storeLocalData('character', userData.character.id, 'defaultMapId', mapId);
+                storeLocalData('character', userData.character.id, key, value);
             }
         }
     };
@@ -820,7 +1029,7 @@ define([
         if(objectId > 0){
             // get current map config
             let storageKey = getLocalStoragePrefixByType(type) + objectId;
-            Util.getLocalStorage().getItem(storageKey).then(function(data) {
+            Util.getLocalStorage().getItem(storageKey).then(function(data){
                 // This code runs once the value has been loaded
                 // from the offline store.
                 data = (data === null) ? {} : data;
@@ -831,13 +1040,207 @@ define([
                 key: key,
                 value: value,
                 storageKey: storageKey
-            })).catch(function(err) {
+            })).catch(function(err){
                 // This code runs if there were any errors
                 console.error('Map local storage can not be accessed!');
             });
         }else{
             console.warn('storeLocalData(): Local storage requires object id > 0');
         }
+    };
+
+    /**
+     * show map animations when a new map gets visual
+     * @param mapElement
+     * @param show
+     * @returns {Promise<any>}
+     */
+    let visualizeMap = (mapElement, show) => {
+
+        let visualizeMapExecutor = (resolve, reject) => {
+            // start map update counter -> prevent map updates during animations
+            mapElement.getMapOverlay('timer').startMapUpdateCounter();
+
+            let systemElements = mapElement.find('.' + config.systemClass);
+            let endpointElements =  mapElement.find('.jsplumb-endpoint:visible');
+            let connectorElements = mapElement.find('.jsplumb-connector:visible');
+            let overlayElements = mapElement.find('.jsplumb-overlay:visible, .tooltip');
+
+            let hideElements = (elements) => {
+                if(elements.length > 0){
+                    // disable transition for next opacity change
+                    elements.addClass('pf-notransition');
+                    // hide elements
+                    elements.css('opacity', 0);
+                    // Trigger a reflow, flushing the CSS changes
+                    // -> http://stackoverflow.com/questions/11131875/what-is-the-cleanest-way-to-disable-css-transition-effects-temporarily
+                    elements[0].offsetHeight; // jshint ignore:line
+                    elements.removeClass('pf-notransition');
+                }
+
+                return elements;
+            };
+
+            let mapElements = systemElements.add(endpointElements).add(connectorElements);
+
+            // show nice animation
+            if(show === 'show'){
+                hideElements(systemElements);
+                hideElements(endpointElements);
+                hideElements(connectorElements);
+                hideElements(overlayElements);
+
+                overlayElements.velocity('transition.fadeIn', {
+                    duration: 60,
+                    display: 'auto'
+                });
+
+                if(mapElements.length){
+                    mapElements.velocity({
+                        translateY: [ 0, -20],
+                        opacity: [ 1, 0 ]
+                    }, {
+                        duration: 150,
+                        easing: 'easeOut',
+                        complete: function(){
+                            resolve({
+                                action: 'visualizeMap',
+                                data: false
+                            });
+                        }
+                    });
+                }else{
+                    // "complete" callback is not fired if no elements were animated
+                    resolve({
+                        action: 'visualizeMap',
+                        data: false
+                    });
+                }
+
+            }else if(show === 'hide'){
+
+                overlayElements.velocity('transition.fadeOut', {
+                    duration: 60,
+                    display: 'auto'
+                });
+
+                if(mapElements.length){
+                    mapElements.velocity({
+                        translateY: [ -20, 0 ],
+                        opacity: [ 0, 1 ]
+                    }, {
+                        duration: 150,
+                        easing: 'easeOut',
+                        complete: function(){
+                            resolve({
+                                action: 'visualizeMap',
+                                data: false
+                            });
+                        }
+                    });
+                }else{
+                    // "complete" callback is not fired if no elements were animated
+                    resolve({
+                        action: 'visualizeMap',
+                        data: false
+                    });
+                }
+
+            }
+        };
+
+        return new Promise(visualizeMapExecutor);
+    };
+
+    /**
+     * set default map Options (
+     * -> HINT: This function triggers Events! Promise is resolved before trigger completed
+     * @param mapElement
+     * @param mapConfig
+     * @returns {Promise<any>}
+     */
+    let setMapDefaultOptions = (mapElement, mapConfig) => {
+
+        let setMapDefaultOptionsExecutor = (resolve, reject) => {
+            // update main menu options based on the active map -----------------------------------------------
+            $(document).trigger('pf:updateMenuOptions', {
+                mapConfig: mapConfig
+            });
+
+            // init compact system layout ---------------------------------------------------------------------
+            mapElement.triggerMenuEvent('MapOption', {
+                option: 'mapCompact',
+                toggle: false
+            });
+
+            // init magnetizer --------------------------------------------------------------------------------
+            mapElement.triggerMenuEvent('MapOption', {
+                option: 'mapMagnetizer',
+                toggle: false
+            });
+
+            // init grid snap ---------------------------------------------------------------------------------
+            mapElement.triggerMenuEvent('MapOption', {
+                option: 'mapSnapToGrid',
+                toggle: false
+            });
+
+            // init endpoint overlay --------------------------------------------------------------------------
+            mapElement.triggerMenuEvent('MapOption', {
+                option: 'mapEndpoint',
+                toggle: false
+            });
+
+            resolve({
+                action: 'setMapDefaultOptions',
+                data: false
+            });
+        };
+
+        return new Promise(setMapDefaultOptionsExecutor);
+    };
+
+    /**
+     * get system coordinates from systemElement
+     * @param system
+     * @returns {{x: number, y: number}}
+     */
+    let getSystemPosition = system => {
+        let x = system.css('left');
+        let y = system.css('top');
+
+        return {
+          x: parseInt(x.substring(0, x.length - 2)),
+          y: parseInt(y.substring(0, y.length - 2))
+        };
+    };
+
+    /**
+     * scroll map to default (stored) x/y coordinates
+     * @param mapElement
+     * @returns {Promise<any>}
+     */
+    let scrollToDefaultPosition = (mapElement) => {
+
+        let scrollToDefaultPositionExecutor = (resolve, reject) => {
+            let mapWrapper = mapElement.parents('.' + config.mapWrapperClass);
+
+            // auto scroll map to previous stored position
+            let promiseStore = getLocaleData('map', mapElement.data('id'));
+            promiseStore.then(data => {
+                // This code runs once the value has been loaded from  offline storage
+                if(data && data.scrollOffset){
+                    mapWrapper.scrollToPosition([data.scrollOffset.y, data.scrollOffset.x]);
+                }
+
+                resolve({
+                    action: 'scrollToDefaultPosition',
+                    data: false
+                });
+            });
+        };
+
+        return new Promise(scrollToDefaultPositionExecutor);
     };
 
     /**
@@ -850,7 +1253,7 @@ define([
         if(objectId > 0){
             // get current map config
             let storageKey = getLocalStoragePrefixByType(type) + objectId;
-            Util.getLocalStorage().getItem(storageKey).then(function(data) {
+            Util.getLocalStorage().getItem(storageKey).then(function(data){
                 if(
                     data &&
                     data.hasOwnProperty(key)
@@ -878,8 +1281,8 @@ define([
 
         let defaultOptions = {
             poke: false,
-            hideNotification: false,
-            hideCounter: false,
+            hideNotification: false,    // do not show notification
+            hideCounter: false          // do not start map update counter
         };
         options = $.extend({}, defaultOptions, options);
 
@@ -897,8 +1300,8 @@ define([
 
                 if(rallyUpdated > 0){
                     // new rally point set OR update system with rally information
+                    system.addClass(rallyClass);
 
-                    system.addClass( rallyClass );
                     // rallyUpdated > 0 is required for poke!
                     rallyPoke = options.poke;
 
@@ -918,7 +1321,7 @@ define([
                         let mapId = system.data('mapid');
                         let systemId = system.data('id');
                         let promiseStore = getLocaleData('map', mapId);
-                        promiseStore.then(function(data) {
+                        promiseStore.then(function(data){
                             // This code runs once the value has been loaded
                             // from the offline store.
                             let rallyPokeData = {};
@@ -939,7 +1342,11 @@ define([
                                 storeLocalData('map', this.mapId, 'rallyPoke', rallyPokeData);
 
                                 notificationOptions.type = 'info';
-                                Util.showNotify(notificationOptions, {desktop: true, stack: 'barBottom'});
+                                Util.showNotify(notificationOptions, {
+                                    desktop: true,
+                                    stack: 'barBottom',
+                                    click: e => {window.location.href = getMapDeeplinkUrl(mapId, systemId);}
+                                });
                             }
                         }.bind({
                             mapId: mapId,
@@ -947,9 +1354,17 @@ define([
                             rallyUpdated: rallyUpdated
                         }));
                     }
+
+                    // update active "route" module -> add rally point row --------------------------------------------
+                    let mapContainer = system.parents('.' + config.mapClass);
+                    findRoute(mapContainer, {
+                        systemId: system.data('systemId'),
+                        name: system.data('name'),
+                        rally: 1
+                    });
                 }else{
                     // rally point removed
-                    system.removeClass( rallyClass );
+                    system.removeClass(rallyClass);
 
                     if( !options.hideNotification ){
                         Util.showNotify({title: 'Rally point removed', type: 'success'});
@@ -972,10 +1387,11 @@ define([
 
             // dynamic require Map module -> otherwise there is a require(), loop
             let Map = require('app/map/map');
+            let System = require('app/map/system');
             let map = Map.getMapInstance( mapElement.data('id'));
 
             mapWrapper.watchKey('mapSystemAdd', (mapWrapper) => {
-                Map.showNewSystemDialog(map, {position: {x: 0, y: 0}});
+                System.showNewSystemDialog(map, {position: {x: 0, y: 0}}, Map.saveSystemCallback);
             },{focus: true});
 
             mapWrapper.watchKey('mapSystemsSelect', (mapWrapper) => {
@@ -991,23 +1407,132 @@ define([
     };
 
     /**
-     * add a wormhole tooltip with wh specific data to elements
-     * @param tooltipData
-     * @param small
+     * add system pilot tooltip
+     * @param systemUserData
+     * @param options
      * @returns {*}
      */
-    $.fn.addWormholeInfoTooltip = function (tooltipData, small = false) {
-        return this.each(function () {
+    $.fn.addSystemPilotTooltip = function(systemUserData, options){
+        let content = Util.getSystemPilotsTable(systemUserData);
+
+        let defaultOptions = {
+            placement: 'top',
+            html: true,
+            trigger: 'hover',
+            container: 'body',
+            title: 'Pilots',
+            content: content,
+            delay: {
+                show: 150,
+                hide: 0
+            },
+        };
+
+        options = $.extend({}, defaultOptions, options);
+
+        return this.each(function(){
+            $(this).popover(options);
+        });
+    };
+
+    /**
+     * add system effect tooltip
+     * @param security
+     * @param effect
+     * @param options
+     * @returns {*}
+     */
+    $.fn.addSystemEffectTooltip = function(security, effect, options){
+        let effectClass = getEffectInfoForSystem(effect, 'class');
+        let systemEffectData = Util.getSystemEffectData(security, effect);
+
+        let title = '<i class="fas fa-square fa-fw ' + effectClass + '"></i>&nbsp;' +
+            getEffectInfoForSystem(effect, 'name') +
+            '<span class="pull-right ' + Util.getSecurityClassForSystem(security) + '">' + security + '</span>';
+
+        let content = Util.getSystemEffectTable(systemEffectData);
+
+        let defaultOptions = {
+            placement: 'top',
+            html: true,
+            trigger: 'hover',
+            container: 'body',
+            title: title,
+            content: content,
+            delay: {
+                show: 150,
+                hide: 0
+            },
+        };
+
+        options = $.extend({}, defaultOptions, options);
+
+        return this.each(function(){
+            $(this).popover(options);
+        });
+    };
+
+    /**
+     * add system planets tooltip
+     * @param planets
+     * @param options
+     * @returns {*}
+     */
+    $.fn.addSystemPlanetsTooltip = function(planets, options){
+
+        let content = Util.getSystemPlanetsTable(planets);
+
+        let defaultOptions = {
+            placement: 'top',
+            html: true,
+            trigger: 'hover',
+            container: 'body',
+            title: 'Planets',
+            content: content,
+            delay: {
+                show: 150,
+                hide: 0
+            },
+        };
+
+        options = $.extend({}, defaultOptions, options);
+
+        return this.each(function(){
+            if(planets.length){
+                // Abyss systems don´t have planets -> no tooltip
+                let element = $(this);
+                element.popover(options);
+
+                if(options.show){
+                    element.popover('show');
+                }
+            }
+        });
+    };
+
+    /**
+     * add a wormhole tooltip with wh specific data to elements
+     * @param tooltipData
+     * @param options
+     * @returns {*}
+     */
+    $.fn.addWormholeInfoTooltip = function(tooltipData, options){
+        return this.each(function(){
             let element = $(this);
 
-            requirejs(['text!templates/tooltip/wormhole_info.html', 'mustache'], function (template, Mustache) {
+            requirejs(['text!templates/tooltip/wormhole_info.html', 'mustache'], (template, Mustache) => {
+
                 // format tooltip data
                 let data = {};
                 if(tooltipData.massTotal){
                     data.massTotal = Util.formatMassValue(tooltipData.massTotal);
+                }else{
+                    data.massTotal = '<span class="txt-color txt-color-grayLight">unknown</span>';
                 }
                 if(tooltipData.massIndividual){
                     data.massIndividual = Util.formatMassValue(tooltipData.massIndividual);
+                }else{
+                    data.massIndividual = '<span class="txt-color txt-color-grayLight">unknown</span>';
                 }
                 if(tooltipData.massRegeneration){
                     data.massRegeneration = Util.formatMassValue(tooltipData.massRegeneration);
@@ -1016,148 +1541,55 @@ define([
                     data.maxStableTime = tooltipData.maxStableTime + ' h';
                 }
                 if(tooltipData.signatureStrength){
-                    data.signatureStrength = parseFloat(tooltipData.signatureStrength).toLocaleString();
-                } else {
-                    data.signatureStrength = 'unknown';
+                    data.signatureStrength = parseFloat(tooltipData.signatureStrength).toLocaleString() + '&nbsp;&#37;';
+                }else{
+                    data.signatureStrength = '<span class="txt-color txt-color-grayLight">unknown</span>';
                 }
 
-                let title = tooltipData.name +
-                    '<span class="pull-right ' + tooltipData.class +'">' + tooltipData.security + '</span>';
+                let title = tooltipData.name;
+
+                if(tooltipData.security){
+                    // K162 has no security
+
+                    if(!tooltipData.class){
+                        tooltipData.class = Util.getSecurityClassForSystem(tooltipData.security);
+                    }
+
+                    title += '<span class="pull-right ' + tooltipData.class +'">' + tooltipData.security + '</span>';
+                }
+
                 let content = Mustache.render(template, data);
 
-                element.popover({
+                let defaultOptions = {
                     placement: 'top',
                     html: true,
                     trigger: 'hover',
                     container: 'body',
+                    title: title,
+                    content: '',
                     delay: {
-                        show: 250,
+                        show: 150,
                         hide: 0
                     }
-                });
-                if (small) {
-                    element.setTooltipSmall();
-                }
+                };
+
+                options = $.extend({}, defaultOptions, options);
+
+                element.popover(options);
+
                 // set new popover content
                 let popover = element.data('bs.popover');
                 popover.options.title = title;
                 popover.options.content = content;
+
+                if(options.smaller){
+                    element.setPopoverSmall();
+                }
+
+                if(options.show){
+                    element.popover('show');
+                }
             });
-        });
-    };
-
-    /**
-     * add a system effect tooltip
-     * @param security
-     * @param effect
-     * @param small
-     * @returns {*}
-     */
-    $.fn.addSystemEffectTooltip = function (security, effect, small = false) {
-        return this.each(function () {
-            let element = $(this);
-
-            let systemEffectData = Util.getSystemEffectData(security, effect);
-            if (systemEffectData !== false) {
-                let title = '<span class="pf-font-capitalize">' + getEffectInfoForSystem(effect, 'name') + '</span>' +
-                    '<span class="pull-right ' + Util.getSecurityClassForSystem(security) + '">' + security + '</span>';
-                let content = Util.getSystemEffectTable(systemEffectData);
-
-                element.popover({
-                    html: true,
-                    trigger: 'hover',
-                    placement: 'top',
-                    container: 'body',
-                    delay: {
-                        show: 250,
-                        hide: 0
-                    }
-                });
-                if (small) {
-                    element.setTooltipSmall();
-                }
-                // set new popover content
-                let popover = element.data('bs.popover');
-                popover.options.title = title;
-                popover.options.content = content;
-            }
-        });
-    };
-
-    /**
-     * add a active pilots tooltip with ship info
-     * @param users
-     * @param small
-     * @returns {*}
-     */
-    $.fn.addSystemPilotsTooltip = function (users, small = false) {
-        return this.each(function () {
-            let element = $(this);
-
-            requirejs(['text!templates/tooltip/pilots_info.html', 'mustache'], function (template, Mustache) {
-                // format tooltip data
-                let data = {'pilots': []};
-                for (let i = 0; i < users.length; i++) {
-                    let userData = users[i];
-
-                    data.pilots.push({
-                        'name': userData.name,
-                        'shipName': userData.log.ship.typeName,
-                        'statusClass': Util.getStatusInfoForCharacter(userData, 'class')
-                    });
-                }
-
-                let title = 'Active pilots';
-                let content = Mustache.render(template, data);
-
-                element.popover({
-                    placement: 'top',
-                    html: true,
-                    trigger: 'hover',
-                    container: 'body',
-                    delay: {
-                        show: 250,
-                        hide: 0
-                    }
-                });
-                if (small) {
-                    element.setTooltipSmall();
-                }
-                // set new popover content
-                let popover = element.data('bs.popover');
-                popover.options.title = title;
-                popover.options.content = content;
-            });
-        });
-    };
-
-    /**
-     * adds the small-class to a tooltip
-     * @returns {string}
-     */
-    $.fn.setTooltipSmall = function () {
-        return this.each(function () {
-            let element = $(this);
-
-            let popover = element.data('bs.popover');
-
-            if (popover) {
-                popover.tip().addClass('pf-popover-small');
-            }
-        });
-    };
-
-    /**
-     * removes a tooltip
-     * @returns {string}
-     */
-    $.fn.removeTooltip = function () {
-        return this.each(function () {
-            let element = $(this);
-
-            if (element.data('bs.popover')) {
-                element.popover('destroy');
-            }
         });
     };
 
@@ -1240,13 +1672,54 @@ define([
     /**
      * get a unique map url for deeplinking
      * @param mapId
+     * @param systemId
      * @returns {string}
      */
-    let getMapDeeplinkUrl = (mapId) => {
+    let getMapDeeplinkUrl = (mapId, systemId) => {
         let url = location.protocol + '//' + location.host + '/map';
         url += mapId ? '/' + encodeURIComponent(window.btoa(mapId)) : '';
-
+        url += systemId ? '_' + encodeURIComponent(window.btoa(systemId)) : '';
         return url;
+    };
+
+    /**
+     * request system data
+     * @param requestData
+     * @param context
+     * @returns {Promise<any>}
+     */
+    let requestSystemData = (requestData, context) => {
+
+        let requestSystemDataExecutor = (resolve, reject) => {
+            let payload = {
+                action: 'systemData'
+            };
+
+            $.ajax({
+                url: Init.path.getSystemData,
+                type: 'POST',
+                dataType: 'json',
+                data: requestData,
+                context: context
+            }).done(function(data){
+                payload.context = this;
+
+                if(data.system){
+                    // system data found
+                    payload.data = data.system;
+                    resolve(payload);
+                }else{
+                    // no system data returned/found
+                    reject(payload);
+                }
+            }).fail(function(jqXHR, status, error){
+                console.warn('Fail request systemData!', requestData);
+                payload.context = this;
+                reject(payload);
+            });
+        };
+
+        return new Promise(requestSystemDataExecutor);
     };
 
     return {
@@ -1265,10 +1738,12 @@ define([
         getSystemData: getSystemData,
         getSystemTypeInfo: getSystemTypeInfo,
         getEffectInfoForSystem: getEffectInfoForSystem,
-        toggleSelectSystem: toggleSelectSystem,
+        toggleSystemsSelect: toggleSystemsSelect,
         toggleConnectionActive: toggleConnectionActive,
+        setSystemActive: setSystemActive,
         showSystemInfo: showSystemInfo,
         showConnectionInfo: showConnectionInfo,
+        showFindRouteDialog: showFindRouteDialog,
         getConnectionsByType: getConnectionsByType,
         getDataByConnection: getDataByConnection,
         searchConnectionsBySystems: searchConnectionsBySystems,
@@ -1280,16 +1755,23 @@ define([
         setConnectionWHStatus: setConnectionWHStatus,
         getScopeInfoForConnection: getScopeInfoForConnection,
         getDataByConnections: getDataByConnections,
+        deleteConnections: deleteConnections,
         getConnectionDataFromSignatures: getConnectionDataFromSignatures,
         getEndpointOverlayContent: getEndpointOverlayContent,
         getTabContentElementByMapElement: getTabContentElementByMapElement,
         hasActiveConnection: hasActiveConnection,
-        storeDefaultMapId: storeDefaultMapId,
+        filterMapByScopes: filterMapByScopes,
+        storeLocaleCharacterData: storeLocaleCharacterData,
         getLocaleData: getLocaleData,
         storeLocalData: storeLocalData,
         deleteLocalData: deleteLocalData,
+        visualizeMap: visualizeMap,
+        setMapDefaultOptions: setMapDefaultOptions,
+        getSystemPosition: getSystemPosition,
+        scrollToDefaultPosition: scrollToDefaultPosition,
         getSystemId: getSystemId,
         checkRight: checkRight,
-        getMapDeeplinkUrl: getMapDeeplinkUrl
+        getMapDeeplinkUrl: getMapDeeplinkUrl,
+        requestSystemData: requestSystemData
     };
 });

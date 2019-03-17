@@ -75,26 +75,6 @@ class SystemSignatureModel extends AbstractMapTrackingModel {
     ];
 
     /**
-     * set an array with all data for a system
-     * @param $data
-     */
-    public function setData($data){
-        unset($data['id']);
-        unset($data['created']);
-        unset($data['updated']);
-        unset($data['createdCharacterId']);
-        unset($data['updatedCharacterId']);
-
-        foreach((array)$data as $key => $value){
-            if(!is_array($value)){
-                if($this->exists($key)){
-                    $this->$key = $value;
-                }
-            }
-        }
-    }
-
-    /**
      * get signature data
      * @return \stdClass
      */
@@ -182,8 +162,8 @@ class SystemSignatureModel extends AbstractMapTrackingModel {
 
     /**
      * @param string $action
-     * @return Logging\LogInterface
-     * @throws \Exception\PathfinderException
+     * @return logging\LogInterface
+     * @throws \Exception\ConfigException
      */
     public function newLog($action = ''): Logging\LogInterface{
         return $this->getMap()->newLog($action)->setTempData($this->getLogObjectData());
@@ -207,18 +187,21 @@ class SystemSignatureModel extends AbstractMapTrackingModel {
     /**
      * compares a new data set (array) with the current values
      * and checks if something has changed
-     * @param $signatureData
+     * @param array $signatureData
      * @return bool
      */
-    public function hasChanged($signatureData){
+    public function hasChanged(array $signatureData) : bool {
         $hasChanged = false;
 
         foreach((array)$signatureData as $key => $value){
-            if(
-                $this->exists($key) &&
-                $this->$key != $value
-            ){
-                $hasChanged = true;
+            if($this->exists($key)){
+                if($this->$key instanceof ConnectionModel){
+                    $currentValue = $this->get($key, true);
+                }else{
+                    $currentValue = $this->$key;
+                }
+
+                $hasChanged = $currentValue !== $value;
                 break;
             }
         }
@@ -238,14 +221,17 @@ class SystemSignatureModel extends AbstractMapTrackingModel {
     /**
      * delete signature
      * @param CharacterModel $characterModel
+     * @return bool
      */
-    public function delete(CharacterModel $characterModel){
+    public function delete(CharacterModel $characterModel) : bool {
+        $deleted = false;
         if( !$this->dry() ){
             // check if character has access
             if($this->hasAccess($characterModel)){
-                $this->erase();
+                $deleted = $this->erase();
             }
         }
+        return $deleted;
     }
 
     /**
@@ -256,6 +242,22 @@ class SystemSignatureModel extends AbstractMapTrackingModel {
      */
     public function afterInsertEvent($self, $pkeys){
         $self->logActivity('signatureCreate');
+    }
+
+    /**
+     * Event "Hook" function
+     * can be overwritten
+     * return false will stop any further action
+     * @param self $self
+     * @param $pkeys
+     * @return bool
+     */
+    public function beforeUpdateEvent($self, $pkeys){
+        // "updated" column should always be updated if no changes made this signature
+        // -> makes it easier to see what signatures have not been updated
+        $this->touch('updated');
+
+        return parent::beforeUpdateEvent($self, $pkeys);
     }
 
     /**
@@ -295,6 +297,7 @@ class SystemSignatureModel extends AbstractMapTrackingModel {
      * @param null $table
      * @param null $fields
      * @return bool
+     * @throws \Exception
      */
     public static function setup($db=null, $table=null, $fields=null){
         $status = parent::setup($db,$table,$fields);
