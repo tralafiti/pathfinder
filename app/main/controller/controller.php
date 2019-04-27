@@ -14,7 +14,6 @@ use lib\api\CcpClient;
 use lib\Config;
 use lib\Resource;
 use lib\Monolog;
-use lib\Socket;
 use lib\Util;
 use Model;
 use DB;
@@ -153,7 +152,6 @@ class Controller {
                 new DB\SQL\MySQL\Session($this->getDB('PF'), 'sessions', true, $onSuspect);
             }
         }
-
     }
 
     /**
@@ -418,17 +416,15 @@ class Controller {
      * @return Model\CharacterModel|null
      * @throws \Exception
      */
-    public function getCharacter($ttl = 0){
+    public function getCharacter(int $ttl = 0) : ?Model\CharacterModel {
         $character = null;
-        $characterData = $this->getSessionCharacterData();
 
-        if( !empty($characterData) ){
+        if(!empty($characterData = $this->getSessionCharacterData())){
             /**
              * @var $characterModel Model\CharacterModel
              */
             $characterModel = Model\BasicModel::getNew('CharacterModel');
-            $characterModel->getById( (int)$characterData['ID'], $ttl);
-
+            $characterModel->getById((int)$characterData['ID'], $ttl);
             if(
                 !$characterModel->dry() &&
                 $characterModel->hasUserCharacter()
@@ -491,7 +487,7 @@ class Controller {
      * @param bool $deleteSession
      * @param bool $deleteLog
      * @param bool $deleteCookie
-     * @throws \ZMQSocketException
+     * @throws \Exception
      */
     protected function logoutCharacter(\Base $f3, bool $all = false, bool $deleteSession = true, bool $deleteLog = true, bool $deleteCookie = false){
         $sessionCharacterData = (array)$f3->get(Api\User::SESSION_KEY_CHARACTERS);
@@ -517,7 +513,7 @@ class Controller {
 
             if($characterIds){
                 // broadcast logout information to webSocket server
-                (new Socket( Config::getSocketUri() ))->sendData('characterLogout', $characterIds);
+                $f3->webSocket()->write('characterLogout', $characterIds);
             }
         }
 
@@ -972,17 +968,6 @@ class Controller {
      */
     static function getEnvironmentData($key){
         return Config::getEnvironmentData($key);
-    }
-
-
-    /**
-     * health check for ICP socket -> ping request
-     * @param $ttl
-     * @param $load
-     * @throws \ZMQSocketException
-     */
-    static function checkTcpSocket($ttl, $load){
-        (new Socket( Config::getSocketUri(), $ttl ))->sendData('healthCheck', $load);
     }
 
 } 

@@ -259,17 +259,28 @@ select:active, select:hover {
     padding: 1px;
   }
 
-  .dt-buttons{
+  .dt-buttons,
+  .dt-stats{
+    display: inline-block;
+    line-height: 22px;
+    margin-bottom: 5px;
+
     .dt-button{
-      line-height: 22px;
       padding: 0 5px; // overwrite default
 
       &:not(:last-child){
-        margin-right: 10px;
+        margin-right: 5px;
+      }
+    }
+
+    .dt-button,
+    .dt-stat{
+      .fas{
+        margin-right: 5px;
       }
 
-      .fa{
-        margin-right: 5px;
+      &.disabled{
+        color: darken($gray-light, 8%)
       }
     }
   }
@@ -705,7 +716,7 @@ table{
 
 // maps module ====================================================================================
 #pf-map-module{
-  margin: 20px 10px 0 10px;
+  margin: 15px 10px 0 10px;
 
   // Tabs (colored)
   #pf-map-tabs {
@@ -764,6 +775,10 @@ table{
 .pf-map-content-row{
   margin-top: 10px;
   padding-bottom: 40px; // space for footer
+
+  >.pf-map-content-col:first-child{
+    padding-right: 0; // overwrite default
+  }
 
   // all modules within a row
   .pf-module{
@@ -1488,6 +1503,11 @@ code {
 
   .pf-head-program-status{
     cursor: pointer;
+  }
+
+  .pf-head-map-tracking{
+    margin-bottom: 4px;
+    margin-top: 4px;
   }
 
   .navbar-text{

@@ -1228,12 +1228,14 @@ define([
     let initDefaultEditableConfig = () => {
         // use fontAwesome buttons template
         $.fn.editableform.buttons =
-            '<button type="submit" class="btn btn-primary btn-sm editable-submit">'+
-            '<i class="fa fa-fw fa-check"></i>'+
-            '</button>'+
+            '<div class="btn-group">'+
             '<button type="button" class="btn btn-default btn-sm editable-cancel">'+
             '<i class="fa fa-fw fa-times"></i>'+
-            '</button>';
+            '</button>' +
+            '<button type="submit" class="btn btn-success btn-sm editable-submit">'+
+            '<i class="fa fa-fw fa-check"></i>'+
+            '</button>'+
+            '</div>';
 
         // loading spinner template
         $.fn.editableform.loading =
@@ -1618,14 +1620,23 @@ define([
             }
             url += path;
 
-            $.ajax({
+            let ajaxOptions = {
                 type: action,
                 url: url,
-                data: JSON.stringify(data),
-                contentType: 'application/json; charset=utf-8',
-                dataType: 'json',
+                dataType: 'json',   // expected response dataType
                 context: context
-            }).done(function(response){
+            };
+
+            if(action === 'GET'){
+                // data as url params
+                ajaxOptions.data = data;
+            }else{
+                // json data in body
+                ajaxOptions.data = JSON.stringify(data);
+                ajaxOptions.contentType = 'application/json; charset=utf-8';
+            }
+
+            $.ajax(ajaxOptions).done(function(response){
                 payload.data = response;
                 payload.context = this;
                 resolve(payload);

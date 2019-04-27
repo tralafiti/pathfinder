@@ -262,7 +262,7 @@ class Setup extends Controller {
 
         // Socket -----------------------------------------------------------------------------------------------------
         // WebSocket information
-        $f3->set('socketInformation', $this->getSocketInformation());
+        $f3->set('socketInformation', $this->getSocketInformation($f3));
 
         // Administration ---------------------------------------------------------------------------------------------
         // Index information
@@ -561,23 +561,6 @@ class Setup extends Controller {
                 'tooltip' => 'Redis can replace the default file-caching mechanic. It is much faster!'
             ],
             [
-                'label' => 'ØMQ TCP sockets [optional]'
-            ],
-            'ext_zmq' => [
-                'label' => 'ZeroMQ extension',
-                'required' => $f3->get('REQUIREMENTS.PHP.ZMQ'),
-                'version' => extension_loaded('zmq') ? phpversion('zmq') : 'missing',
-                'check' => version_compare( phpversion('zmq'), $f3->get('REQUIREMENTS.PHP.ZMQ'), '>='),
-                'tooltip' => 'ØMQ PHP extension. Required for WebSocket configuration.'
-            ],
-            'lib_zmq' => [
-                'label' => 'ZeroMQ installation',
-                'required' => $f3->get('REQUIREMENTS.LIBS.ZMQ'),
-                'version' => (class_exists('ZMQ') && defined('ZMQ::LIBZMQ_VER')) ? \ZMQ::LIBZMQ_VER : 'unknown',
-                'check' => version_compare( (class_exists('ZMQ') && defined('ZMQ::LIBZMQ_VER')) ? \ZMQ::LIBZMQ_VER : 0, $f3->get('REQUIREMENTS.LIBS.ZMQ'), '>='),
-                'tooltip' => 'ØMQ version. Required for WebSocket configuration.'
-            ],
-            [
                 'label' => 'LibEvent library [optional]'
             ],
             'ext_event' => [
@@ -742,7 +725,7 @@ class Setup extends Controller {
             $getClientInfo = function(\Redis $client, array $conf) : array {
                 $redisInfo = [
                     'dsn' => [
-                        'label' => 'DNS',
+                        'label' => 'DSN',
                         'value' => $conf['host'] . ':' . $conf['port']
                     ],
                     'connected' => [
@@ -764,6 +747,7 @@ class Setup extends Controller {
 
                 if($client->isConnected()){
                     $redisServerInfo = (array)$client->info('SERVER');
+                    $redisClientsInfo = (array)$client->info('CLIENTS');
                     $redisMemoryInfo = (array)$client->info('MEMORY');
                     $redisStatsInfo = (array)$client->info('STATS');
 
@@ -800,6 +784,18 @@ class Setup extends Controller {
                             'version' => $redisMemoryInfo['maxmemory_policy'],
                             'check' => $redisMemoryInfo['maxmemory_policy'] == $f3->get('REQUIREMENTS.REDIS.MAXMEMORY_POLICY'),
                             'tooltip' => 'How Redis behaves if \'maxmemory\' limit reached'
+                        ],
+                        'connectedClients' => [
+                            'label' => 'connected_clients',
+                            'version' => $redisClientsInfo['connected_clients'],
+                            'check' => (bool)$redisClientsInfo['connected_clients'],
+                            'tooltip' => 'Number of client connections (excluding connections from replicas)'
+                        ],
+                        'blockedClients' => [
+                            'label' => 'blocked_clients',
+                            'version' => $redisClientsInfo['blocked_clients'],
+                            'check' => !(bool)$redisClientsInfo['blocked_clients'],
+                            'tooltip' => 'Number of clients pending on a blocking call (BLPOP, BRPOP, BRPOPLPUSH)'
                         ],
                         'evictedKeys' => [
                             'label' => 'evicted_keys',
@@ -863,7 +859,7 @@ class Setup extends Controller {
                     $client = new \Redis();
 
                     try{
-                        $client->connect($conf['host'], $conf['port'], 0.3);
+                        $client->pconnect($conf['host'], $conf['port'], 0.3);
                         if(isset($conf['db'])) {
                             $client->select($conf['db']);
                         }
@@ -1094,6 +1090,8 @@ class Setup extends Controller {
 
             // DB connection status
             $dbConnected = false;
+            // DB initialized as persistent connection
+            $dbPersistent = false;
             // DB type (e.g. MySql,..)
             $dbDriver = 'unknown';
             // enable database ::create() function on UI
@@ -1147,6 +1145,7 @@ class Setup extends Controller {
 
                 // db connect was successful
                 $dbConnected = true;
+                $dbPersistent = $db->pdo()->getAttribute(\PDO::ATTR_PERSISTENT);
                 $dbDriver = $db->driver();
                 $dbConfig = $this->checkDBConfig($f3, $db);
 
@@ -1394,6 +1393,7 @@ class Setup extends Controller {
                 'dbCreate'          => $dbCreate,
                 'setupEnable'       => $dbSetupEnable,
                 'connected'         => $dbConnected,
+                'persistent'        => $dbPersistent,
                 'statusCheckCount'  => $dbStatusCheckCount,
                 'columnQueries'     => $dbColumnQueries,
                 'tableData'         => $requiredTables,
@@ -1506,51 +1506,98 @@ class Setup extends Controller {
 
     /**
      * get Socket information (TCP (internal)), (WebSocket (clients))
+     * @param \Base $f3
      * @return array
-     * @throws \ZMQSocketException
+     * @throws \Exception
      */
-    protected function getSocketInformation(){
-        // $ttl for health check
-        $ttl = 600;
-
+    protected function getSocketInformation(\Base $f3) : array {
+        $ttl = 0.6;
+        $task = 'healthCheck';
         $healthCheckToken = microtime(true);
 
-        // ping TCP Socket with checkToken
-        self::checkTcpSocket($ttl,  $healthCheckToken);
+        $statusTcp = [
+            'type'  => 'danger',
+            'label' => 'INIT CONNECTION…',
+            'class' => 'txt-color-danger'
+        ];
+
+        $webSocketStatus = [
+            'type'  => 'danger',
+            'label' => 'INIT CONNECTION…',
+            'class' => 'txt-color-danger'
+        ];
+
+        $statsTcp = [
+            'startup'           => 0,
+            'connections'       => 0,
+            'maxConnections'    => 0
+        ];
+
+        // ping TCP Socket with "healthCheck" task
+        $f3->webSocket(['timeout' => $ttl])
+            ->write($task, $healthCheckToken)
+            ->then(
+                function($payload) use ($task, $healthCheckToken, &$statusTcp, &$statsTcp) {
+                    if(
+                        $payload['task'] == $task &&
+                        $payload['load'] == $healthCheckToken
+                    ){
+                        $statusTcp['type'] = 'success';
+                        $statusTcp['label'] = 'PING OK';
+                        $statusTcp['class'] = 'txt-color-success';
+
+                        // statistics (e.g. current connection count)
+                        if(!empty($payload['stats'])){
+                            $statsTcp = $payload['stats'];
+                        }
+                    }else{
+                        $statusTcp['type'] = 'warning';
+                        $statusTcp['label'] = is_string($payload['load']) ? $payload['load'] : 'INVALID RESPONSE';
+                        $statusTcp['class'] = 'txt-color-warning';
+                    }
+                },
+                function($payload) use (&$statusTcp) {
+                    $statusTcp['label'] = $payload['load'];
+                });
 
         $socketInformation = [
             'tcpSocket' => [
-                'label' => 'Socket (intern) [TCP]',
-                'online' => true,
+                'label'  => 'Socket (intern) [TCP]',
+                'status' => $statusTcp,
+                'stats'  => $statsTcp,
                 'data' => [
                     [
                         'label' => 'HOST',
-                        'value' => Config::getEnvironmentData('SOCKET_HOST'),
+                        'value' => Config::getEnvironmentData('SOCKET_HOST') ? : '[missing]',
                         'check' => !empty( Config::getEnvironmentData('SOCKET_HOST') )
                     ],[
                         'label' => 'PORT',
-                        'value' => Config::getEnvironmentData('SOCKET_PORT'),
+                        'value' => Config::getEnvironmentData('SOCKET_PORT') ? : '[missing]',
                         'check' => !empty( Config::getEnvironmentData('SOCKET_PORT') )
                     ],[
                         'label' => 'URI',
-                        'value' => Config::getSocketUri(),
+                        'value' => Config::getSocketUri() ? : '[missing]',
                         'check' => !empty( Config::getSocketUri() )
                     ],[
-                        'label' => 'timeout (ms)',
+                        'label' => 'timeout (seconds)',
                         'value' => $ttl,
                         'check' => !empty( $ttl )
+                    ],[
+                        'label' => 'uptime',
+                        'value' => Config::formatTimeInterval($statsTcp['startup']),
+                        'check' => $statsTcp['startup'] > 0
                     ]
                 ],
                 'token' => $healthCheckToken
             ],
             'webSocket' => [
                 'label' => 'WebSocket (clients) [HTTP]',
-                'online' => false,
+                'status' => $webSocketStatus,
                 'data' => [
                     [
                         'label' => 'URI',
                         'value' => '',
-                        'check' => false
+                        'check' => null // undefined
                     ]
                 ]
             ]
@@ -1568,8 +1615,22 @@ class Setup extends Controller {
     protected function getIndexData(\Base $f3){
         // active DB and tables are required for obtain index data
         if(!$this->databaseHasError){
+            /**
+             * @var $categoryUniverseModel Model\Universe\CategoryModel
+             */
             $categoryUniverseModel = Model\Universe\BasicUniverseModel::getNew('CategoryModel');
+            $categoryUniverseModel->getById(65, 0);
+            $structureCount = $categoryUniverseModel->getTypesCount(false);
+
+            $categoryUniverseModel->getById(6, 0);
+            $shipCount = $categoryUniverseModel->getTypesCount(false);
+
+            /**
+             * @var $systemNeighbourModel Model\SystemNeighbourModel
+             */
             $systemNeighbourModel = Model\BasicModel::getNew('SystemNeighbourModel');
+
+
 
             $indexInfo = [
                 'Systems' => [
@@ -1601,7 +1662,7 @@ class Setup extends Controller {
                         ]
                     ],
                     'label' => 'import structures data',
-                    'countBuild' => $categoryUniverseModel->getById(65, 0)->getTypesCount(false),
+                    'countBuild' => $structureCount,
                     'countAll' => (int)$f3->get('REQUIREMENTS.DATA.STRUCTURES'),
                     'tooltip' => 'import all structure types (e.g. Citadels) from ESI. Runtime: ~15s'
                 ],
@@ -1615,7 +1676,7 @@ class Setup extends Controller {
                         ]
                     ],
                     'label' => 'import ships data',
-                    'countBuild' => $categoryUniverseModel->getById(6, 0)->getTypesCount(false),
+                    'countBuild' => $shipCount,
                     'countAll' => (int)$f3->get('REQUIREMENTS.DATA.SHIPS'),
                     'tooltip' => 'import all ships types from ESI. Runtime: ~2min'
                 ],
@@ -1776,7 +1837,7 @@ class Setup extends Controller {
      */
     protected function flushRedisDb(string $host, int $port, int $db = 0){
         $client = new \Redis();
-        $client->connect($host, $port, 0.3);
+        $client->pconnect($host, $port, 0.3);
         $client->select($db);
         $client->flushDB();
         $client->close();

@@ -68,16 +68,6 @@ define([
     };
 
     /**
-     * callback -> add structure rows from responseData
-     * @param context
-     * @param responseData
-     */
-    let callbackAddStructureRows = (context, responseData) => {
-        let systemData = Util.getObjVal(responseData, 'system');
-        callbackUpdateStructureRows(context, systemData);
-    };
-
-    /**
      * callback -> add structure rows from systemData
      * @param context
      * @param systemData
@@ -160,10 +150,9 @@ define([
     /**
      * callback -> delete structure rows
      * @param context
-     * @param responseData
+     * @param structureIds
      */
-    let callbackDeleteStructures = (context, responseData) => {
-        let structureIds = Util.getObjVal(responseData, 'deletedStructureIds');
+    let callbackDeleteStructures = (context, structureIds) => {
         let deletedCounter = 0;
         if(structureIds && structureIds.length){
             for(let structureId of structureIds){
@@ -210,36 +199,6 @@ define([
     };
 
     /**
-     * requests system data
-     * @param requestData
-     * @param context
-     * @param callback
-     */
-    let getStructureData = (requestData, context, callback) => {
-        sendRequest(Init.path.getSystemData, requestData, context, callback);
-    };
-
-    /**
-     * save structure data
-     * @param requestData
-     * @param context
-     * @param callback
-     */
-    let saveStructureData = (requestData, context, callback) => {
-        sendRequest(Init.path.saveStructureData, requestData, context, callback);
-    };
-
-    /**
-     * delete structure
-     * @param requestData
-     * @param context
-     * @param callback
-     */
-    let deleteStructure = (requestData, context, callback) => {
-        sendRequest(Init.path.deleteStructureData, requestData, context, callback);
-    };
-
-    /**
      * show structure dialog
      * @param moduleElement
      * @param tableApi
@@ -248,7 +207,6 @@ define([
      */
     let showStructureDialog = (moduleElement, tableApi, systemId, structureData) => {
         let structureStatusData = Util.getObjVal(Init, 'structureStatus');
-        let structureTypeData = Util.getObjVal(Init, 'structureStatus');
 
         let statusData = Object.keys(structureStatusData).map((k) => {
             let data = structureStatusData[k];
@@ -300,12 +258,15 @@ define([
                                 formData.corporationId = Util.getObjVal(formData, 'corporationId') | 0;
                                 formData.systemId = systemId | 0;
 
-                                saveStructureData({
-                                    structures: [formData]
-                                }, {
+                                let method = formData.id ? 'PATCH' : 'PUT';
+
+                                Util.request(method, 'structure', formData.id, formData, {
                                     moduleElement: moduleElement,
                                     tableApi: tableApi
-                                }, callbackUpdateStructureRows);
+                                }).then(
+                                    payload => callbackUpdateStructureRows(payload.context, {structures: payload.data}),
+                                    Util.handleAjaxErrorResponse
+                                );
                             }else{
                                 return false;
                             }
@@ -620,12 +581,14 @@ define([
 
                                     // let deleteRowElement = $(cell).parents('tr');
                                     // tableApi.rows(deleteRowElement).remove().draw();
-                                    deleteStructure({
-                                        id: rowData.id
-                                    },{
+
+                                    Util.request('DELETE', 'structure', rowData.id, {}, {
                                         moduleElement: moduleElement,
                                         tableApi: tableApi
-                                    }, callbackDeleteStructures);
+                                    }).then(
+                                        payload => callbackDeleteStructures(payload.context, payload.data),
+                                        Util.handleAjaxErrorResponse
+                                    );
                                 }
                             };
 
@@ -775,9 +738,11 @@ define([
     let updateStructureTableByClipboard = (systemData, clipboard, context) => {
         let structureData = parseDscanString(systemData, clipboard);
         if(structureData.length){
-            saveStructureData({
-                structures: structureData
-            }, context, callbackUpdateStructureRows);
+            Util.request('POST', 'structure', [], structureData, context)
+                .then(
+                    payload => callbackUpdateStructureRows(payload.context, {structures: payload.data}),
+                    Util.handleAjaxErrorResponse
+                );
         }
     };
 
@@ -826,14 +791,16 @@ define([
 
         // init refresh button ----------------------------------------------------------------------------------------
         moduleElement.find('.' + config.moduleHeadlineIconRefreshClass).on('click', function(e){
-            getStructureData({
-                mapId: mapId,
-                systemId: systemData.id
-            },{
-                moduleElement: moduleElement,
-                tableApi: tableApi,
-                removeMissing: true
-            }, callbackAddStructureRows);
+            moduleElement.showLoadingAnimation();
+
+            Util.request('GET', 'system', systemData.id, {mapId: mapId},
+                    {
+                        moduleElement: moduleElement,
+                        tableApi: tableApi,
+                        removeMissing: true
+                    },
+                    context => context.moduleElement.hideLoadingAnimation()
+                ).then(payload => callbackUpdateStructureRows(payload.context, payload.data));
         });
 
         // init listener for global "past" dScan into this page -------------------------------------------------------
@@ -850,8 +817,6 @@ define([
      * @param moduleElement
      */
     let beforeDestroy = moduleElement => {
-        // Destroying the data tables throws
-        // -> safety remove  all dataTables
         let structureTableElement = moduleElement.find('.' + config.systemStructuresTableClass);
         let tableApi = structureTableElement.DataTable();
         tableApi.destroy();

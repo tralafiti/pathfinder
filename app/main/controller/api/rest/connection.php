@@ -17,7 +17,6 @@ class Connection extends AbstractRestController {
      * if a connection is changed (drag&drop) to another system. -> this function is called for update
      * @param \Base $f3
      * @throws \Exception
-     * @throws \ZMQSocketException
      */
     public function put(\Base $f3){
         $requestData = $this->getRequestData($f3);
@@ -31,7 +30,6 @@ class Connection extends AbstractRestController {
              */
             $map = Model\BasicModel::getNew('MapModel');
             $map->getById($mapId);
-
             if($map->hasAccess($activeCharacter)){
                 $source = $map->getSystemById((int)$requestData['source']);
                 $target = $map->getSystemById((int)$requestData['target']);
@@ -71,7 +69,6 @@ class Connection extends AbstractRestController {
      * @param \Base $f3
      * @param $params
      * @throws \Exception
-     * @throws \ZMQSocketException
      */
     public function delete(\Base $f3, $params){
         $requestData = $this->getRequestData($f3);
@@ -86,7 +83,6 @@ class Connection extends AbstractRestController {
              */
             $map = Model\BasicModel::getNew('MapModel');
             $map->getById($mapId);
-
             if($map->hasAccess($activeCharacter)){
                 foreach($connectionIds as $connectionId){
                     if($connection = $map->getConnectionById($connectionId)){
