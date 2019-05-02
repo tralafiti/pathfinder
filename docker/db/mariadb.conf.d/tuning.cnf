@@ -74,7 +74,7 @@ innodb_flush_log_at_trx_commit = 2
 innodb_adaptive_hash_index = off
 
 # Kill iddle connections after 10min
-wait_timeout = 600
+wait_timeout = 28800
 
 [mysqldump]
 max-allowed-packet = 16M

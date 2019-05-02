@@ -12,10 +12,6 @@ services:
       - ${EXPOSE_PORT_HTTP}:80
       - ${EXPOSE_PORT_HTTPS}:443
     volumes:
-      - ./docker/nginx/http.conf:/etc/nginx/conf.d/00-http.conf:cached
-      - ./docker/nginx/vhost.conf:/etc/nginx/conf.d/99-vhost.conf:cached
-      - ./docker/nginx/ssl:/etc/nginx/ssl:cached
-      - ./docker/nginx/auth:/etc/nginx/auth:cached
       - .:/var/www/html:cached
 
   php:
@@ -24,6 +20,7 @@ services:
       context: docker/php
       args:
         USER_ID: ${DOCKER_USER_ID}
+        PHP_ENV: ${PHP_ENV}
     depends_on:
       - db
       - redis
@@ -34,13 +31,8 @@ services:
       - 8020
       - 9000
     volumes:
-      - ./docker/php/supervisord.conf:/etc/supervisord.conf:cached
-      - ./docker/php/supercronictab:/etc/supercronictab:cached
-      - ./docker/php/php-fpm.conf:/usr/local/etc/php-fpm.conf:cached
-      - ./docker/php/php-common.ini:/usr/local/etc/php/conf.d/50-settings-common.ini:cached
-      - ./docker/php/php-${PHP_ENV}.ini:/usr/local/etc/php/conf.d/51-settings-env.ini:cached
-      - .:/var/www/html:cached
       - ./docker/php/appenvconfig.ini:/var/www/html/conf/docker.ini:cached
+      - .:/var/www/html:cached
 
   db:
     container_name: ${COMPOSE_PROJECT_NAME}_db
@@ -53,7 +45,6 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     volumes:
       - db:/var/lib/mysql:consistent
-      - ./docker/db/mariadb.conf.d:/etc/mysql/mariadb.conf.d:cached
 
   redis:
     container_name: ${COMPOSE_PROJECT_NAME}_redis
@@ -62,8 +53,6 @@ services:
       - net
     expose:
       - 6379
-    volumes:
-      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:cached
 
 volumes:
   db:

@@ -1,8 +1,6 @@
-FROM php:7.2-fpm-alpine3.8
+FROM php:7.3-fpm-alpine
 
 RUN apk add --no-cache --virtual .persistent-deps \
-        # for ext-zmq
-        libzmq \
         # for ext-event
         libevent \
         openssl \
@@ -17,8 +15,6 @@ RUN apk add --no-cache --virtual .persistent-deps \
 RUN apk add --no-cache --virtual .build-deps \
         # common build stuff
         autoconf cmake file g++ gcc libc-dev pcre-dev make pkgconf re2c \
-        # for ext-zmq
-        zeromq-dev \
         # for ext-event
         libevent-dev \
         openssl-dev \
@@ -36,11 +32,9 @@ RUN apk add --no-cache --virtual .build-deps \
         # for ext-event
         sockets \
     && pecl install \
-        zmq-1.1.3 \
-        redis-4.2.0 \
-        event-2.4.3 \
+        redis-4.3.0 \
+        event-2.5.0 \
     && docker-php-ext-enable \
-        zmq \
         redis \
     && docker-php-ext-enable event --ini-name xx-docker-php-ext-event.ini \
     && apk del .build-deps \
@@ -49,7 +43,7 @@ RUN apk add --no-cache --virtual .build-deps \
 COPY --from=composer:1 /usr/bin/composer /usr/bin/composer
 
 ENV SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/v0.1.8/supercronic-linux-amd64 \
-    WEBSOCKET_URL=https://github.com/exodus4d/pathfinder_websocket/archive/40c1cc5f7b4d5328a81e051c637491b2d4c25cf1.tar.gz
+    WEBSOCKET_URL=https://github.com/exodus4d/pathfinder_websocket/archive/c77e3dd484fd32201a3254068afd09f6ef875345.tar.gz
 
 RUN apk add --no-cache --virtual .install-deps \
         wget \
@@ -68,5 +62,12 @@ RUN apk add --no-cache --virtual .usermod-deps \
         shadow \
     && usermod -u ${USER_ID} www-data \
     && apk del .usermod-deps
+
+ARG PHP_ENV
+COPY supercronictab /etc/supercronictab
+COPY supervisord.conf /etc/supervisord.conf
+COPY php-fpm.conf /usr/local/etc/php-fpm.conf
+COPY php-common.ini /usr/local/etc/php/conf.d/50-settings-common.ini
+COPY php-${PHP_ENV}.ini /usr/local/etc/php/conf.d/51-settings-env.ini
 
 CMD ["supervisord", "-c", "/etc/supervisord.conf"]
