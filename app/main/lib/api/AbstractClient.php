@@ -37,6 +37,9 @@ use Psr\Http\Message\RequestInterface;
  */
 abstract class AbstractClient extends \Prefab {
 
+    /**
+     * error msg for missing Composer package
+     */
     const ERROR_CLIENT_INVALID = "HTTP API client not found → Check installed Composer packages";
 
     /**
@@ -131,6 +134,12 @@ abstract class AbstractClient extends \Prefab {
                         Config::REDIS_OPT_READ_TIMEOUT
                     )
                 ){
+
+                    if(isset($poolConfig['tag'])){
+                        $name = 'pathfinder|php|tag:' . strtolower($poolConfig['tag']) . '|pid:' . getmypid();
+                        $client->client('setname', $name);
+                    }
+
                     if(isset($poolConfig['db'])){
                         $client->select($poolConfig['db']);
                     }
@@ -152,11 +161,10 @@ abstract class AbstractClient extends \Prefab {
                 in_array($poolConfig['type'], ['redis', 'folder']) &&
                 class_exists(FilesystemCachePool::class)
             ){
-                $filesystemAdapter  = new Local('./');
+                $filesystemAdapter  = new Local(\Base::instance()->get('ROOT'));
                 $filesystem         = new Filesystem($filesystemAdapter);
+                $poolFilesystem     = new FilesystemCachePool($filesystem, $poolConfig['folder']);
 
-                $poolFilesystem = new FilesystemCachePool($filesystem);
-                $poolFilesystem->setFolder($poolConfig['folder']);
                 $this->cachePool = $poolFilesystem;
             }
 
@@ -179,7 +187,8 @@ abstract class AbstractClient extends \Prefab {
      * @return array
      */
     protected function getCachePoolConfig(\Base $f3) : array {
-        $dsn = (string)$f3->get('API_CACHE');
+        $tag = 'API_CACHE';
+        $dsn = (string)$f3->get($tag);
 
         // fallback
         $conf = ['type' => 'array'];
@@ -194,6 +203,10 @@ abstract class AbstractClient extends \Prefab {
 
         // redis or filesystem -> overwrites $conf
         Config::parseDSN($dsn, $conf);
+
+        // tag name is used as alias name e.g. for debugging
+        // -> e.g. for Redis https://redis.io/commands/client-setname
+        $conf['tag'] = $tag;
 
         return $conf;
     }
@@ -302,7 +315,7 @@ abstract class AbstractClient extends \Prefab {
     /**
      * init web client on __invoke()
      * -> no need to init client on __construct()
-     *    maybe it is nerer used...
+     *    maybe it is never used...
      * @return AbstractClient
      */
     function __invoke() : self {

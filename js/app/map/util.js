@@ -81,24 +81,20 @@ define([
      * @param mapId
      * @returns {*}
      */
-    let getMapInstance = (mapId) => {
-        return activeInstances[mapId];
-    };
+    let getMapInstance = mapId => activeInstances[mapId];
 
     /**
      * check for mapInstance is set
      * @param mapId
      * @returns {boolean}
      */
-    let existsMapInstance = (mapId) => {
-        return typeof activeInstances[mapId] === 'object';
-    };
+    let existsMapInstance = mapId => typeof activeInstances[mapId] === 'object';
 
     /**
      * removes a map instance
      * @param mapId
      */
-    let clearMapInstance = (mapId) => {
+    let clearMapInstance = mapId => {
         if(existsMapInstance(mapId)){
             delete activeInstances[mapId];
         }
@@ -284,6 +280,40 @@ define([
     };
 
     /**
+     * filter jsPlumb connection or endpoint types
+     * -> remove default type(s)
+     * @param types
+     * @returns {*}
+     */
+    let filterDefaultTypes = types => {
+        let defaultTypes = ['', 'default', 'state_active', 'state_process'];
+        return types.diff(defaultTypes);
+    };
+
+    /**
+     * returns "target/source"  label from endpoint
+     * @param connection
+     * @param endpoint
+     * @returns {string}
+     */
+    let getEndpointLabel = (connection, endpoint) => {
+        return endpoint.element === connection.source ? 'source' : endpoint.element === connection.target ? 'target' : false;
+    };
+
+    /**
+     * get data from endpoint
+     * @param connection
+     * @param endpoint
+     * @returns {{types: *, label: string}}
+     */
+    let getDataByEndpoint = (connection, endpoint) => {
+        return {
+            label: getEndpointLabel(connection, endpoint),
+            types: filterDefaultTypes(endpoint.getType())
+        };
+    };
+
+    /**
      * filter connections by type
      * @param map
      * @param type
@@ -304,37 +334,38 @@ define([
     /**
      * get all relevant data for a connection object
      * @param connection
-     * @returns {{id: Number, source: Number, sourceName: (*|T|JQuery|{}), target: Number, targetName: (*|T|JQuery), scope: *, type: *, updated: Number}}
+     * @returns {{targetName: *, endpoints, scope: *, targetAlias: *, id: number, source: number, sourceName: *, type, updated: number, sourceAlias: *, target: number}}
      */
-    let getDataByConnection = (connection) => {
+    let getDataByConnection = connection => {
         let source = $(connection.source);
         let target = $(connection.target);
 
         let id = connection.getParameter('connectionId');
         let updated = connection.getParameter('updated');
 
-        let connectionTypes = connection.getType();
+        let endpoints = {source: {}, target: {}};
+        for(let endpoint of connection.endpoints){
+            let endpointData = getDataByEndpoint(connection, endpoint);
+            if(endpointData.label === 'source'){
+                endpoints.source = endpointData;
+            }else if(endpointData.label === 'target'){
+                endpoints.target = endpointData;
+            }
+        }
 
-        // normalize connection array
-        connectionTypes = $.grep(connectionTypes, function(n){
-            // 'default' is added by jsPlumb by default -_-
-            return ( n.length > 0 && n !== 'default' && n !== 'active');
-        });
-
-        let data = {
+        return {
             id: id ? id : 0,
-            source: parseInt( source.data('id') ),
+            source: parseInt(source.data('id')),
             sourceName: source.data('name'),
             sourceAlias: source.getSystemInfo(['alias']) || source.data('name'),
-            target: parseInt( target.data('id') ),
+            target: parseInt(target.data('id')),
             targetName: target.data('name'),
             targetAlias: target.getSystemInfo(['alias']) || target.data('name'),
             scope: connection.scope,
-            type: connectionTypes,
+            type: filterDefaultTypes(connection.getType()),
+            endpoints: endpoints,
             updated: updated ? updated : 0
         };
-
-        return data;
     };
 
     /**
@@ -342,7 +373,7 @@ define([
      * @param connections
      * @returns {Array}
      */
-    let getDataByConnections = (connections) => {
+    let getDataByConnections = connections => {
         let data = [];
         for(let connection of connections){
             data.push(getDataByConnection(connection));
@@ -372,6 +403,8 @@ define([
             // connectionIds for delete request
             let connectionIds = [];
             for(let connection of connections){
+                connection.addType('state_process');
+
                 let connectionId = connection.getParameter('connectionId');
                 // drag&drop a new connection does not have an id yet, if connection is not established correct
                 if(connectionId !== undefined){
@@ -386,6 +419,13 @@ define([
                     connections: connections
                 }).then(
                     payload => {
+                        for(let connection of payload.context.connections){
+                            // connection might be removed rom global map update before this requests ends
+                            if(connection._jsPlumb){
+                                connection.removeType('state_process');
+                            }
+                        }
+
                         // check if all connections were deleted that should get deleted
                         let deletedConnections = payload.context.connections.filter(
                             function(connection){
@@ -430,7 +470,6 @@ define([
         ){
             let SystemSignatures = require('app/ui/module/system_signature');
 
-            let connectionId        = connection.getParameter('connectionId');
             let sourceEndpoint      = connection.endpoints[0];
             let targetEndpoint      = connection.endpoints[1];
             let sourceSystem        = $(sourceEndpoint.element);
@@ -516,7 +555,7 @@ define([
      * @returns {boolean}
      */
     let hasActiveConnection = map => {
-        let activeConnections = getConnectionsByType(map, 'active');
+        let activeConnections = getConnectionsByType(map, 'state_active');
         return activeConnections.length > 0;
     };
 
@@ -647,12 +686,12 @@ define([
      */
     let setConnectionsActive = (map, connections) => {
         // set all inactive
-        for(let connection of getConnectionsByType(map, 'active')){
-            connection.removeType('active');
+        for(let connection of getConnectionsByType(map, 'state_active')){
+            connection.removeType('state_active');
         }
 
         for(let connection of connections){
-            connection.addType('active');
+            connection.addType('state_active');
         }
     };
 
@@ -694,11 +733,11 @@ define([
         let selectedConnections = [];
         let deselectedConnections = [];
         for(let connection of connections){
-            if(connection.hasType('active')){
-                connection.removeType('active');
+            if(connection.hasType('state_active')){
+                connection.removeType('state_active');
                 deselectedConnections.push(connection);
             }else{
-                connection.addType('active');
+                connection.addType('state_active');
                 selectedConnections.push(connection);
             }
         }
@@ -1704,6 +1743,7 @@ define([
         showSystemInfo: showSystemInfo,
         showConnectionInfo: showConnectionInfo,
         showFindRouteDialog: showFindRouteDialog,
+        getEndpointLabel: getEndpointLabel,
         getConnectionsByType: getConnectionsByType,
         getDataByConnection: getDataByConnection,
         searchConnectionsBySystems: searchConnectionsBySystems,

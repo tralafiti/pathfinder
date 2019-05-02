@@ -65,12 +65,16 @@ define([
     let validSignatureNames = [                                                 // allowed signature type/names
         'Cosmic Anomaly',
         'Cosmic Signature',
-        'Kosmische Anomalie',
-        'Kosmische Signatur',
-        'Anomalie cosmique',
-        'Signature cosmique',
-        'Космическая аномалия',                                                 // == "Cosmic Anomaly"
-        'Источники сигналов'                                                    // == "Cosmic Signature"
+        'Kosmische Anomalie',                                                   // de: "Cosmic Anomaly"
+        'Kosmische Signatur',                                                   // de: "Cosmic Signature"
+        'Космическая аномалия',                                                 // ru: "Cosmic Anomaly"
+        'Скрытый сигнал',                                                       // rm: "Cosmic Signature"
+        'Anomalie cosmique',                                                    // fr: "Cosmic Anomaly"
+        'Signature cosmique',                                                   // fr: "Cosmic Signature"
+        '宇宙の特異点',                                                               // ja: "Cosmic Anomaly"
+        '宇宙のシグネチャ',                                                             // ja: "Cosmic Signature"
+        '异常空间',                                                                 // zh: "Cosmic Anomaly"
+        '空间信号'                                                                  // zh: "Cosmic Signature"
     ];
 
     let emptySignatureData = {
@@ -635,8 +639,22 @@ define([
 
                         // wormhole type cant be extracted from signature string -> skip function call
                         if(sigGroupId !== 5){
-                            // try to get "typeId" by description string
-                            typeId = Util.getSignatureTypeIdByName(systemData, sigGroupId, sigDescription);
+                            // try to get "typeId" from description string
+                            let sigDescriptionLowerCase = sigDescription.toLowerCase();
+
+                            let typeOptions = getAllSignatureNames(
+                                systemData,
+                                systemData.type.id,
+                                Util.getAreaIdBySecurity(systemData.security),
+                                sigGroupId
+                            );
+
+                            for(let [key, name] of Object.entries(Util.flattenXEditableSelectArray(typeOptions))){
+                                if(name.toLowerCase() === sigDescriptionLowerCase){
+                                    typeId = parseInt(key);
+                                    break;
+                                }
+                            }
 
                             // set signature name as "description" if signature matching failed
                             sigDescription = (typeId === 0) ? sigDescription : '';
@@ -647,7 +665,7 @@ define([
                         // map array values to signature Object
                         let signatureObj = {
                             systemId: systemData.id,
-                            name: $.trim( rowData[0] ).toLowerCase(),
+                            name: $.trim(rowData[0]).toLowerCase(),
                             groupId: sigGroupId,
                             typeId: typeId,
                             description: sigDescription
@@ -720,13 +738,12 @@ define([
             // valid signature data parsed
 
             // check if signatures will be added to a system where character is currently in
-            // if user is not in any system -> id === undefined -> no "confirmation required
+            // if character is not in any system -> id === undefined -> no "confirmation required
             let currentLocationData = Util.getCurrentLocationData();
             if(
                 currentLocationData.id &&
                 currentLocationData.id !== systemData.id
             ){
-
                 let systemNameStr = (systemData.name === systemData.alias) ? '"' + systemData.name + '"' : '"' + systemData.alias + '" (' + systemData.name + ')';
                 systemNameStr = '<span class="txt-color txt-color-warning">' + systemNameStr + '</span>';
 
@@ -1084,16 +1101,69 @@ define([
     /**
      * helper function - set 'shown' observer for xEditable connection cell
      * -> enable Select2 for xEditable form
+     * @param tableApi
      * @param cell
      */
-    let editableConnectionOnShown = cell => {
+    let editableConnectionOnShown = (tableApi, cell) => {
         $(cell).on('shown', function(e, editable){
             let inputField = editable.input.$input;
 
+            if(!$(tableApi.table().node()).hasClass(config.sigTablePrimaryClass)){
+                // we need the primary table API to get selected connections
+                let metaData = getTableMetaData(tableApi);
+                tableApi = getDataTableInstance(metaData.mapId, metaData.systemId, 'primary');
+            }
+
             // Select2 init would work without passing select options as "data", Select2 would grap data from DOM
             // -> We want to pass "meta" data for each option into Select2 for formatting
+            let selectOptions = Util.convertXEditableOptionsToSelect2(editable);
+
+            // for better UX, systems that are already linked to a wh signatures should be "disabled"
+            // -> and grouped into a new <optgroup>
+            let linkedConnectionIds = tableApi.column('connection:name').data().toArray();
+            linkedConnectionIds = linkedConnectionIds.filter(id => id > 0);
+
+            if(linkedConnectionIds.length){
+                let groupedSelectOptions = [];
+                let newSelectOptionGroupDisabled = [];
+                for(let selectOptionGroup of selectOptions){
+                    if(Array.isArray(selectOptionGroup.children)){
+                        let newSelectOptionGroup = [];
+                        for(let option of selectOptionGroup.children){
+                            if(!option.selected && linkedConnectionIds.includes(option.id)){
+                                // connection already linked -> move to "disabled" group
+                                option.disabled = true;
+                                newSelectOptionGroupDisabled.push(option);
+                            }else{
+                                // connection is available for link
+                                newSelectOptionGroup.push(option);
+                            }
+                        }
+
+                        if(newSelectOptionGroup.length){
+                            groupedSelectOptions.push({
+                                text: selectOptionGroup.text,
+                                children: newSelectOptionGroup
+                            });
+                        }
+                    }else{
+                        // option has no children -> is prepend (id = 0) option
+                        groupedSelectOptions.push(selectOptionGroup);
+                    }
+                }
+
+                if(newSelectOptionGroupDisabled.length){
+                    groupedSelectOptions.push({
+                        text: 'linked',
+                        children: newSelectOptionGroupDisabled
+                    });
+                }
+
+                selectOptions = groupedSelectOptions;
+            }
+
             let options = {
-                data: Util.convertXEditableOptionsToSelect2(editable)
+                data: selectOptions
             };
 
             inputField.addClass('pf-select2').initSignatureConnectionSelect(options);
@@ -1485,7 +1555,7 @@ define([
                         editableOnSave(tableApi, cell, [], ['action:name']);
                         editableOnHidden(tableApi, cell);
                         editableConnectionOnInit(cell);
-                        editableConnectionOnShown(cell);
+                        editableConnectionOnShown(tableApi, cell);
                         editableConnectionOnSave(cell);
 
                         $(cell).editable($.extend({
@@ -2438,11 +2508,16 @@ define([
             }
         };
 
+        let getPromiseForRow = (action, rowId) => {
+            return new Promise((resolve, reject) => {
+                resolve({action: action, rowId: rowId});
+            });
+        };
+
         // update signatures ------------------------------------------------------------------------------------------
         allRows.every(function(rowIdx, tableLoop, rowLoop){
             let row = this;
             let rowData = row.data();
-            let rowElement = row.nodes().to$();
 
             for(let i = 0; i < signaturesData.length; i++){
                 if(signaturesData[i].id === rowData.id){
@@ -2457,9 +2532,7 @@ define([
                         row.cells(row.id(true), ['id:name', 'group:name', 'type:name', 'description:name', 'connection:name', 'updated:name'])
                             .every(rowUpdate);
 
-                        promisesChanged.push(new Promise((resolve, reject) => {
-                            resolve({action: 'changed', rowId: rowId});
-                        }));
+                        promisesChanged.push(getPromiseForRow('changed', rowId));
                     }
 
                     rowIdsExist.push(rowId);
@@ -2500,9 +2573,7 @@ define([
             let rowElement = row.nodes().to$();
             rowElement.pulseBackgroundColor('added');
 
-            promisesAdded.push(new Promise((resolve, reject) => {
-                resolve({action: 'added', rowId: rowId});
-            }));
+            promisesAdded.push(getPromiseForRow('added', rowId));
         }
 
         // done -------------------------------------------------------------------------------------------------------

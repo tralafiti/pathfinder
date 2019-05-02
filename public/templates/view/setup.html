@@ -476,7 +476,7 @@
                                         <check if="{{ @dbInformation.info.connected }}">
                                             <true>
                                                 <kbd class="txt-color txt-color-success">
-                                                    connected<check if="{{ @dbInformation.info.persistent }}"> (persistent)</check>
+                                                    connected<check if="{{ @dbInformation.info.persistent }}">&nbsp;(persistent)</check>
                                                 </kbd>
                                             </true>
                                             <false>
@@ -505,20 +505,22 @@
 
                                 <check if="{{ @dbInformation.info.dbConfig }}">
                                     <tr>
-                                        <th></th>
-                                        <th class="text-right">required</th>
-                                        <th class="text-right">installed</th>
-                                        <th class="text-right"></th>
+                                        <td data-target=".{{ @dbInformation.info.name }}_dbConfig_col" data-toggle="collapse" aria-expanded="false" aria-controls="{{ @dbInformation.info.name }}__dbConfig_col">
+                                            <i class="fas fa-fw fa-chevron-right pf-animate-rotate"></i>
+                                        </td>
+                                        <td class="col-sm-3 col-md-3 text-right">required</td>
+                                        <td class="col-sm-3 col-md-3 text-right">installed</td>
+                                        <td class="col-sm-1 col-md-1 text-right"></td>
                                     </tr>
-                                    <repeat group="{{ @dbInformation.info.dbConfig }}" value="{{ @setting }}">
-                                        <tr>
-                                            <td>{{ @setting.label }}</td>
-                                            <td class="text-right">
+                                    <repeat group="{{ @dbInformation.info.dbConfig.data }}" value="{{ @setting }}">
+                                        <tr class="{{ @dbInformation.info.name }}_dbConfig_col {{ @dbInformation.info.dbConfig.meta.check ? 'collapse' : '' }}">
+                                            <td class="bg-color bg-color-tealDarker">{{ @setting.label }}</td>
+                                            <td class="text-right bg-color bg-color-tealDarker">
                                                 <check if="{{ @setting.required }}">
                                                     <kbd>{{ @setting.required }}</kbd>
                                                 </check>
                                             </td>
-                                            <td class="text-right">
+                                            <td class="text-right bg-color bg-color-tealDarker">
                                                 <check if="{{ @setting.check }}">
                                                     <true>
                                                         <kbd class="txt-color txt-color-success">{{ @setting.version }}</kbd>
@@ -528,7 +530,7 @@
                                                     </false>
                                                 </check>
                                             </td>
-                                            <td class="text-right">
+                                            <td class="text-right bg-color bg-color-tealDarker">
                                                 <check if="{{ @setting.check }}">
                                                     <true>
                                                         <i class="fas fa-fw fa-check txt-color txt-color-success"></i>
@@ -650,6 +652,7 @@
                                             </tr>
                                             <repeat group="{{ @tableData.fieldConf }}" key="{{ @columnName }}" value="{{ @columnData }}" counter="{{ @countCol }}">
                                                 <check if="{{ @columnData.type }}">
+                                                    {* Required colums *}
                                                     <tr class="{{ @dbInformation.info.name }}_{{ @tableName }}_col collapse">
                                                         <td class="text-right bg-color bg-color-tealDarker">{{@countCol}}.</td>
                                                         <td class="bg-color bg-color-tealDarker">{{ @columnName }}</td>
@@ -740,6 +743,25 @@
                                                                     <i class="fas fa-fw fa-exclamation-triangle txt-color txt-color-warning"></i>
                                                                 </false>
                                                             </check>
+                                                        </td>
+                                                    </tr>
+                                                </check>
+                                                <check if="{{ @columnData.deprecated }}">
+                                                    {* Deprecated colums *}
+                                                    <tr class="{{ @dbInformation.info.name }}_{{ @tableName }}_col collapse txt-color txt-color-yellowDark">
+                                                        <td class="bg-color bg-color-tealDarker"></td>
+                                                        <td class="bg-color bg-color-tealDarker">{{ @columnName }}</td>
+                                                        <td class="bg-color bg-color-tealDarker text-center">
+                                                            <i class="fas fa-fw fa-bolt"></i>
+                                                        </td>
+                                                        <td class="bg-color bg-color-tealDarker">
+                                                            <kbd class="txt-color txt-color-yellowDark">{{ @columnData.currentType }}</kbd>
+                                                        </td>
+                                                        <td class="bg-color bg-color-tealDarker"></td>
+                                                        <td class="bg-color bg-color-tealDarker"></td>
+                                                        <td class="bg-color bg-color-tealDarker"></td>
+                                                        <td class="bg-color bg-color-tealDarker text-right">
+                                                            <i class="fas fa-fw fa-exclamation-triangle"></i>
                                                         </td>
                                                     </tr>
                                                 </check>

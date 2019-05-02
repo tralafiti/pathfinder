@@ -1,3 +1,5 @@
+$endpointBubbleWidth: 18px;
+
 body{
   // prevent marking text
   -webkit-touch-callout: none;
@@ -483,6 +485,16 @@ select:active, select:hover {
     .pf-table-cell-100{
       width: 110px;
     }
+
+    .pf-endpoint-bubble{
+      width: 15px;
+      height: 15px;
+
+      &:after{
+        width: 15px;
+        height: 15px;
+      }
+    }
   }
 
   // column separator
@@ -889,6 +901,23 @@ table{
 
 .pf-user-status-own{
   color: $indigo;
+}
+
+// Connection Endpoint types ======================================================================
+.pf-endpoint-bubble{
+  display: inline-block;
+  position: relative;
+  width: $endpointBubbleWidth;
+  height: $endpointBubbleWidth;
+
+  &:after{
+    content: url("#{$base-url}/bubble.svg");
+    display: inline-block;
+    pointer-events: none;
+    width: $endpointBubbleWidth;
+    height: $endpointBubbleWidth;
+    vertical-align: top;
+  }
 }
 
 // WH effects =====================================================================================
