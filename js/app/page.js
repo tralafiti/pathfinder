@@ -696,7 +696,7 @@ define([
             let activeMap = Util.getMapModule().getActiveMap();
 
             if(activeMap){
-                mapData = activeMap.getMapDataFromClient({forceData: true});
+                mapData = activeMap.getMapDataFromClient(['hasId']);
             }
 
             $.fn.showDeleteMapDialog(mapData);
