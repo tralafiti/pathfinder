@@ -73,7 +73,7 @@ innodb_flush_log_at_trx_commit = 2
 # See http://www.markleith.co.uk/2009/05/13/innodb_stats_on_metadata-innodb_adaptive_hash_index/
 innodb_adaptive_hash_index = off
 
-# Kill iddle connections after 10min
+# Kill idle connections after 8h
 wait_timeout = 28800
 
 [mysqldump]
