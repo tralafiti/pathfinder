@@ -2990,9 +2990,6 @@ define([
                 MapUtil.setMapDefaultOptions(mapElement, mapConfig.config)
                     .then(payload => MapUtil.visualizeMap(mapElement, 'show'))
                     .then(payload => MapUtil.scrollToDefaultPosition(mapElement))
-                    .then(payload => {
-                        Util.showNotify({title: 'Map initialized', text: mapConfig.config.name  + ' - loaded', type: 'success'});
-                    })
                     .then(() => resolve(payload));
             }else{
                 // nothing to do here...
