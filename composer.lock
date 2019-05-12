@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "466333cf16932a9f91207227b473347c",
+    "content-hash": "d3b6ed6d78264fb6faf440ce37f4903a",
     "packages": [
         {
             "name": "cache/adapter-common",
@@ -578,6 +578,56 @@
             "time": "2018-06-06T18:20:12+00:00"
         },
         {
+            "name": "clue/ndjson-react",
+            "version": "v1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/clue/reactphp-ndjson.git",
+                "reference": "c41a30e7f888dc0e4af18881b2c9ab260ba8d6ce"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/clue/reactphp-ndjson/zipball/c41a30e7f888dc0e4af18881b2c9ab260ba8d6ce",
+                "reference": "c41a30e7f888dc0e4af18881b2c9ab260ba8d6ce",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3",
+                "react/stream": "^1.0 || ^0.7 || ^0.6"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^6.0 || ^5.7 || ^4.8.35",
+                "react/event-loop": "^1.0 || ^0.5 || ^0.4 || ^0.3"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Clue\\React\\NDJson\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Christian Lück",
+                    "email": "christian@lueck.tv"
+                }
+            ],
+            "description": "Streaming newline-delimited JSON (NDJSON) parser and encoder for ReactPHP.",
+            "homepage": "https://github.com/clue/reactphp-ndjson",
+            "keywords": [
+                "NDJSON",
+                "json",
+                "jsonlines",
+                "newline",
+                "reactphp",
+                "streaming"
+            ],
+            "time": "2018-05-17T15:31:04+00:00"
+        },
+        {
             "name": "doctrine/lexer",
             "version": "v1.0.1",
             "source": {
@@ -690,30 +740,25 @@
         },
         {
             "name": "evenement/evenement",
-            "version": "v2.1.0",
+            "version": "v3.0.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/igorw/evenement.git",
-                "reference": "6ba9a777870ab49f417e703229d53931ed40fd7a"
+                "reference": "531bfb9d15f8aa57454f5f0285b18bec903b8fb7"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/igorw/evenement/zipball/6ba9a777870ab49f417e703229d53931ed40fd7a",
-                "reference": "6ba9a777870ab49f417e703229d53931ed40fd7a",
+                "url": "https://api.github.com/repos/igorw/evenement/zipball/531bfb9d15f8aa57454f5f0285b18bec903b8fb7",
+                "reference": "531bfb9d15f8aa57454f5f0285b18bec903b8fb7",
                 "shasum": ""
             },
             "require": {
-                "php": ">=5.4.0"
+                "php": ">=7.0"
             },
             "require-dev": {
-                "phpunit/phpunit": "^6.0||^5.7||^4.8.35"
+                "phpunit/phpunit": "^6.0"
             },
             "type": "library",
-            "extra": {
-                "branch-alias": {
-                    "dev-master": "2.0-dev"
-                }
-            },
             "autoload": {
                 "psr-0": {
                     "Evenement": "src"
@@ -734,20 +779,20 @@
                 "event-dispatcher",
                 "event-emitter"
             ],
-            "time": "2017-07-17T17:39:19+00:00"
+            "time": "2017-07-23T21:35:13+00:00"
         },
         {
             "name": "exodus4d/pathfinder_esi",
-            "version": "v1.3.0",
+            "version": "dev-develop",
             "source": {
                 "type": "git",
                 "url": "https://github.com/exodus4d/pathfinder_esi.git",
-                "reference": "34859f06403ec1ad77f7ecfc4f4c95b7e6120eb6"
+                "reference": "f961a0f69ac866edb5f3ffc3a08dde38286eb374"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/exodus4d/pathfinder_esi/zipball/34859f06403ec1ad77f7ecfc4f4c95b7e6120eb6",
-                "reference": "34859f06403ec1ad77f7ecfc4f4c95b7e6120eb6",
+                "url": "https://api.github.com/repos/exodus4d/pathfinder_esi/zipball/f961a0f69ac866edb5f3ffc3a08dde38286eb374",
+                "reference": "f961a0f69ac866edb5f3ffc3a08dde38286eb374",
                 "shasum": ""
             },
             "require": {
@@ -773,9 +818,9 @@
             ],
             "description": "ESI API library for Pathfinder",
             "support": {
-                "source": "https://github.com/exodus4d/pathfinder_esi/tree/v1.3.0"
+                "source": "https://github.com/exodus4d/pathfinder_esi/tree/develop"
             },
-            "time": "2019-02-10T14:39:31+00:00"
+            "time": "2019-04-19T09:48:13+00:00"
         },
         {
             "name": "guzzlehttp/guzzle",
@@ -962,16 +1007,16 @@
         },
         {
             "name": "league/flysystem",
-            "version": "1.0.50",
+            "version": "1.0.51",
             "source": {
                 "type": "git",
                 "url": "https://github.com/thephpleague/flysystem.git",
-                "reference": "dab4e7624efa543a943be978008f439c333f2249"
+                "reference": "755ba7bf3fb9031e6581d091db84d78275874396"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/thephpleague/flysystem/zipball/dab4e7624efa543a943be978008f439c333f2249",
-                "reference": "dab4e7624efa543a943be978008f439c333f2249",
+                "url": "https://api.github.com/repos/thephpleague/flysystem/zipball/755ba7bf3fb9031e6581d091db84d78275874396",
+                "reference": "755ba7bf3fb9031e6581d091db84d78275874396",
                 "shasum": ""
             },
             "require": {
@@ -1042,7 +1087,7 @@
                 "sftp",
                 "storage"
             ],
-            "time": "2019-02-01T08:50:36+00:00"
+            "time": "2019-03-30T13:22:34+00:00"
         },
         {
             "name": "league/html-to-markdown",
@@ -1418,29 +1463,114 @@
             "time": "2016-02-11T07:05:27+00:00"
         },
         {
-            "name": "react/event-loop",
-            "version": "v0.4.3",
+            "name": "react/cache",
+            "version": "v0.5.0",
             "source": {
                 "type": "git",
-                "url": "https://github.com/reactphp/event-loop.git",
-                "reference": "8bde03488ee897dc6bb3d91e4e17c353f9c5252f"
+                "url": "https://github.com/reactphp/cache.git",
+                "reference": "7d7da7fb7574d471904ba357b39bbf110ccdbf66"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/reactphp/event-loop/zipball/8bde03488ee897dc6bb3d91e4e17c353f9c5252f",
-                "reference": "8bde03488ee897dc6bb3d91e4e17c353f9c5252f",
+                "url": "https://api.github.com/repos/reactphp/cache/zipball/7d7da7fb7574d471904ba357b39bbf110ccdbf66",
+                "reference": "7d7da7fb7574d471904ba357b39bbf110ccdbf66",
                 "shasum": ""
             },
             "require": {
-                "php": ">=5.4.0"
+                "php": ">=5.3.0",
+                "react/promise": "~2.0|~1.1"
             },
             "require-dev": {
-                "phpunit/phpunit": "~4.8"
+                "phpunit/phpunit": "^6.4 || ^5.7 || ^4.8.35"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "React\\Cache\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "Async, Promise-based cache interface for ReactPHP",
+            "keywords": [
+                "cache",
+                "caching",
+                "promise",
+                "reactphp"
+            ],
+            "time": "2018-06-25T12:52:40+00:00"
+        },
+        {
+            "name": "react/dns",
+            "version": "v0.4.17",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/reactphp/dns.git",
+                "reference": "0f30c6ceb71504d359d51132a97e1703051f1589"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/reactphp/dns/zipball/0f30c6ceb71504d359d51132a97e1703051f1589",
+                "reference": "0f30c6ceb71504d359d51132a97e1703051f1589",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.0",
+                "react/cache": "^1.0 || ^0.6 || ^0.5 || ^0.4 || ^0.3",
+                "react/event-loop": "^1.0 || ^0.5 || ^0.4 || ^0.3.5",
+                "react/promise": "^2.1 || ^1.2.1",
+                "react/promise-timer": "^1.2",
+                "react/stream": "^1.0 || ^0.7 || ^0.6 || ^0.5 || ^0.4.5"
+            },
+            "require-dev": {
+                "clue/block-react": "^1.2",
+                "phpunit/phpunit": "^7.0 || ^6.4 || ^5.7 || ^4.8.35"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "React\\Dns\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "Async DNS resolver for ReactPHP",
+            "keywords": [
+                "async",
+                "dns",
+                "dns-resolver",
+                "reactphp"
+            ],
+            "time": "2019-04-01T07:31:55+00:00"
+        },
+        {
+            "name": "react/event-loop",
+            "version": "v1.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/reactphp/event-loop.git",
+                "reference": "a0ecac955c67b57c40fe4a1b88a7cca1b58c982d"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/reactphp/event-loop/zipball/a0ecac955c67b57c40fe4a1b88a7cca1b58c982d",
+                "reference": "a0ecac955c67b57c40fe4a1b88a7cca1b58c982d",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.0"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^7.0 || ^6.4 || ^5.7 || ^4.8.35"
             },
             "suggest": {
-                "ext-event": "~1.0",
-                "ext-libev": "*",
-                "ext-libevent": ">=0.1.0"
+                "ext-event": "~1.0 for ExtEventLoop",
+                "ext-pcntl": "For signal handling support when using the StreamSelectLoop",
+                "ext-uv": "* for ExtUvLoop"
             },
             "type": "library",
             "autoload": {
@@ -1452,79 +1582,285 @@
             "license": [
                 "MIT"
             ],
-            "description": "Event loop abstraction layer that libraries can use for evented I/O.",
+            "description": "ReactPHP's core reactor event loop that libraries can use for evented I/O.",
             "keywords": [
                 "asynchronous",
                 "event-loop"
             ],
-            "time": "2017-04-27T10:56:23+00:00"
+            "time": "2019-02-07T16:19:49+00:00"
         },
         {
-            "name": "react/zmq",
-            "version": "v0.3.0",
+            "name": "react/promise",
+            "version": "v2.7.1",
             "source": {
                 "type": "git",
-                "url": "https://github.com/reactphp/zmq.git",
-                "reference": "2865e3b23000751ed443d3f108da2735abf80716"
+                "url": "https://github.com/reactphp/promise.git",
+                "reference": "31ffa96f8d2ed0341a57848cbb84d88b89dd664d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/reactphp/zmq/zipball/2865e3b23000751ed443d3f108da2735abf80716",
-                "reference": "2865e3b23000751ed443d3f108da2735abf80716",
+                "url": "https://api.github.com/repos/reactphp/promise/zipball/31ffa96f8d2ed0341a57848cbb84d88b89dd664d",
+                "reference": "31ffa96f8d2ed0341a57848cbb84d88b89dd664d",
                 "shasum": ""
             },
             "require": {
-                "evenement/evenement": "~2.0",
-                "ext-zmq": "*",
-                "php": ">=5.4.0",
-                "react/event-loop": "0.4.*"
+                "php": ">=5.4.0"
             },
             "require-dev": {
-                "ext-pcntl": "*"
+                "phpunit/phpunit": "~4.8"
             },
             "type": "library",
-            "extra": {
-                "branch-alias": {
-                    "dev-master": "0.4-dev"
-                }
-            },
             "autoload": {
-                "psr-0": {
-                    "React\\ZMQ": "src"
+                "psr-4": {
+                    "React\\Promise\\": "src/"
+                },
+                "files": [
+                    "src/functions_include.php"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Jan Sorgalla",
+                    "email": "jsorgalla@gmail.com"
+                }
+            ],
+            "description": "A lightweight implementation of CommonJS Promises/A for PHP",
+            "keywords": [
+                "promise",
+                "promises"
+            ],
+            "time": "2019-01-07T21:25:54+00:00"
+        },
+        {
+            "name": "react/promise-stream",
+            "version": "v1.1.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/reactphp/promise-stream.git",
+                "reference": "00e269d611e9c9a29356aef64c07f7e513e73dc9"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/reactphp/promise-stream/zipball/00e269d611e9c9a29356aef64c07f7e513e73dc9",
+                "reference": "00e269d611e9c9a29356aef64c07f7e513e73dc9",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3",
+                "react/promise": "^2.1 || ^1.2",
+                "react/stream": "^1.0 || ^0.7 || ^0.6 || ^0.5 || ^0.4 || ^0.3"
+            },
+            "require-dev": {
+                "clue/block-react": "^1.0",
+                "phpunit/phpunit": "^6.4 || ^5.7 || ^4.8.35",
+                "react/event-loop": "^1.0 || ^0.5 || ^0.4 || ^0.3",
+                "react/promise-timer": "^1.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "React\\Promise\\Stream\\": "src/"
+                },
+                "files": [
+                    "src/functions_include.php"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Christian Lück",
+                    "email": "christian@lueck.tv"
+                }
+            ],
+            "description": "The missing link between Promise-land and Stream-land for ReactPHP",
+            "homepage": "https://github.com/reactphp/promise-stream",
+            "keywords": [
+                "Buffer",
+                "async",
+                "promise",
+                "reactphp",
+                "stream",
+                "unwrap"
+            ],
+            "time": "2017-12-22T12:02:05+00:00"
+        },
+        {
+            "name": "react/promise-timer",
+            "version": "v1.5.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/reactphp/promise-timer.git",
+                "reference": "35fb910604fd86b00023fc5cda477c8074ad0abc"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/reactphp/promise-timer/zipball/35fb910604fd86b00023fc5cda477c8074ad0abc",
+                "reference": "35fb910604fd86b00023fc5cda477c8074ad0abc",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3",
+                "react/event-loop": "^1.0 || ^0.5 || ^0.4 || ^0.3.5",
+                "react/promise": "^2.7.0 || ^1.2.1"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^6.4 || ^5.7 || ^4.8.35"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "React\\Promise\\Timer\\": "src/"
+                },
+                "files": [
+                    "src/functions_include.php"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Christian Lück",
+                    "email": "christian@lueck.tv"
+                }
+            ],
+            "description": "A trivial implementation of timeouts for Promises, built on top of ReactPHP.",
+            "homepage": "https://github.com/reactphp/promise-timer",
+            "keywords": [
+                "async",
+                "event-loop",
+                "promise",
+                "reactphp",
+                "timeout",
+                "timer"
+            ],
+            "time": "2019-03-27T18:10:32+00:00"
+        },
+        {
+            "name": "react/socket",
+            "version": "v1.2.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/reactphp/socket.git",
+                "reference": "23b7372bb25cea934f6124f5bdac34e30161959e"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/reactphp/socket/zipball/23b7372bb25cea934f6124f5bdac34e30161959e",
+                "reference": "23b7372bb25cea934f6124f5bdac34e30161959e",
+                "shasum": ""
+            },
+            "require": {
+                "evenement/evenement": "^3.0 || ^2.0 || ^1.0",
+                "php": ">=5.3.0",
+                "react/dns": "^0.4.13",
+                "react/event-loop": "^1.0 || ^0.5 || ^0.4 || ^0.3.5",
+                "react/promise": "^2.6.0 || ^1.2.1",
+                "react/promise-timer": "^1.4.0",
+                "react/stream": "^1.1"
+            },
+            "require-dev": {
+                "clue/block-react": "^1.2",
+                "phpunit/phpunit": "^6.4 || ^5.7 || ^4.8.35"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "React\\Socket\\": "src"
                 }
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
-            "description": "ZeroMQ bindings for React.",
+            "description": "Async, streaming plaintext TCP/IP and secure TLS socket server and client connections for ReactPHP",
             "keywords": [
-                "zeromq",
-                "zmq"
+                "Connection",
+                "Socket",
+                "async",
+                "reactphp",
+                "stream"
             ],
-            "time": "2014-05-25T17:54:51+00:00"
+            "time": "2019-01-07T14:10:13+00:00"
         },
         {
-            "name": "swiftmailer/swiftmailer",
-            "version": "v6.1.3",
+            "name": "react/stream",
+            "version": "v1.1.0",
             "source": {
                 "type": "git",
-                "url": "https://github.com/swiftmailer/swiftmailer.git",
-                "reference": "8ddcb66ac10c392d3beb54829eef8ac1438595f4"
+                "url": "https://github.com/reactphp/stream.git",
+                "reference": "50426855f7a77ddf43b9266c22320df5bf6c6ce6"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/swiftmailer/swiftmailer/zipball/8ddcb66ac10c392d3beb54829eef8ac1438595f4",
-                "reference": "8ddcb66ac10c392d3beb54829eef8ac1438595f4",
+                "url": "https://api.github.com/repos/reactphp/stream/zipball/50426855f7a77ddf43b9266c22320df5bf6c6ce6",
+                "reference": "50426855f7a77ddf43b9266c22320df5bf6c6ce6",
+                "shasum": ""
+            },
+            "require": {
+                "evenement/evenement": "^3.0 || ^2.0 || ^1.0",
+                "php": ">=5.3.8",
+                "react/event-loop": "^1.0 || ^0.5 || ^0.4 || ^0.3.5"
+            },
+            "require-dev": {
+                "clue/stream-filter": "~1.2",
+                "phpunit/phpunit": "^6.4 || ^5.7 || ^4.8.35"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "React\\Stream\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "Event-driven readable and writable streams for non-blocking I/O in ReactPHP",
+            "keywords": [
+                "event-driven",
+                "io",
+                "non-blocking",
+                "pipe",
+                "reactphp",
+                "readable",
+                "stream",
+                "writable"
+            ],
+            "time": "2019-01-01T16:15:09+00:00"
+        },
+        {
+            "name": "swiftmailer/swiftmailer",
+            "version": "v6.2.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/swiftmailer/swiftmailer.git",
+                "reference": "5397cd05b0a0f7937c47b0adcb4c60e5ab936b6a"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/swiftmailer/swiftmailer/zipball/5397cd05b0a0f7937c47b0adcb4c60e5ab936b6a",
+                "reference": "5397cd05b0a0f7937c47b0adcb4c60e5ab936b6a",
                 "shasum": ""
             },
             "require": {
                 "egulias/email-validator": "~2.0",
-                "php": ">=7.0.0"
+                "php": ">=7.0.0",
+                "symfony/polyfill-iconv": "^1.0",
+                "symfony/polyfill-intl-idn": "^1.10",
+                "symfony/polyfill-mbstring": "^1.0"
             },
             "require-dev": {
                 "mockery/mockery": "~0.9.1",
-                "symfony/phpunit-bridge": "~3.3@dev"
+                "symfony/phpunit-bridge": "^3.4.19|^4.1.8"
             },
             "suggest": {
                 "ext-intl": "Needed to support internationalized email addresses",
@@ -1533,7 +1869,7 @@
             "type": "library",
             "extra": {
                 "branch-alias": {
-                    "dev-master": "6.1-dev"
+                    "dev-master": "6.2-dev"
                 }
             },
             "autoload": {
@@ -1561,36 +1897,41 @@
                 "mail",
                 "mailer"
             ],
-            "time": "2018-09-11T07:12:52+00:00"
+            "time": "2019-04-21T09:21:45+00:00"
         },
         {
-            "name": "websoftwares/monolog-zmq-handler",
-            "version": "0.2.2",
+            "name": "symfony/polyfill-iconv",
+            "version": "v1.11.0",
             "source": {
                 "type": "git",
-                "url": "https://github.com/websoftwares/MonologZMQHandler.git",
-                "reference": "3960af4ab91610bfdaafa6d4daad26bb5c615f02"
+                "url": "https://github.com/symfony/polyfill-iconv.git",
+                "reference": "f037ea22acfaee983e271dd9c3b8bb4150bd8ad7"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/websoftwares/MonologZMQHandler/zipball/3960af4ab91610bfdaafa6d4daad26bb5c615f02",
-                "reference": "3960af4ab91610bfdaafa6d4daad26bb5c615f02",
+                "url": "https://api.github.com/repos/symfony/polyfill-iconv/zipball/f037ea22acfaee983e271dd9c3b8bb4150bd8ad7",
+                "reference": "f037ea22acfaee983e271dd9c3b8bb4150bd8ad7",
                 "shasum": ""
             },
             "require": {
-                "ext-zmq": "*",
-                "monolog/monolog": "~1.10",
-                "php": ">=5.4.0"
+                "php": ">=5.3.3"
             },
-            "require-dev": {
-                "phpunit/phpunit": "4.1.0",
-                "satooshi/php-coveralls": "dev-master"
+            "suggest": {
+                "ext-iconv": "For best performance"
             },
             "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.11-dev"
+                }
+            },
             "autoload": {
                 "psr-4": {
-                    "Websoftwares\\Monolog\\": "src/"
-                }
+                    "Symfony\\Polyfill\\Iconv\\": ""
+                },
+                "files": [
+                    "bootstrap.php"
+                ]
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
@@ -1598,25 +1939,215 @@
             ],
             "authors": [
                 {
-                    "name": "Boris Verhaaff",
-                    "email": "boris@websoftwar.es",
-                    "role": "Developer"
+                    "name": "Nicolas Grekas",
+                    "email": "p@tchwork.com"
+                },
+                {
+                    "name": "Symfony Community",
+                    "homepage": "https://symfony.com/contributors"
                 }
             ],
-            "description": "Sends your logs over a ZeroMQ (ØMQ) socket.",
+            "description": "Symfony polyfill for the Iconv extension",
+            "homepage": "https://symfony.com",
             "keywords": [
-                "handler",
-                "monolog",
-                "zeromq",
-                "zmq"
+                "compatibility",
+                "iconv",
+                "polyfill",
+                "portable",
+                "shim"
             ],
-            "time": "2014-09-15T10:36:56+00:00"
+            "time": "2019-02-06T07:57:58+00:00"
+        },
+        {
+            "name": "symfony/polyfill-intl-idn",
+            "version": "v1.11.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/symfony/polyfill-intl-idn.git",
+                "reference": "c766e95bec706cdd89903b1eda8afab7d7a6b7af"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/symfony/polyfill-intl-idn/zipball/c766e95bec706cdd89903b1eda8afab7d7a6b7af",
+                "reference": "c766e95bec706cdd89903b1eda8afab7d7a6b7af",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.3",
+                "symfony/polyfill-mbstring": "^1.3",
+                "symfony/polyfill-php72": "^1.9"
+            },
+            "suggest": {
+                "ext-intl": "For best performance"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.9-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Symfony\\Polyfill\\Intl\\Idn\\": ""
+                },
+                "files": [
+                    "bootstrap.php"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Symfony Community",
+                    "homepage": "https://symfony.com/contributors"
+                },
+                {
+                    "name": "Laurent Bassin",
+                    "email": "laurent@bassin.info"
+                }
+            ],
+            "description": "Symfony polyfill for intl's idn_to_ascii and idn_to_utf8 functions",
+            "homepage": "https://symfony.com",
+            "keywords": [
+                "compatibility",
+                "idn",
+                "intl",
+                "polyfill",
+                "portable",
+                "shim"
+            ],
+            "time": "2019-03-04T13:44:35+00:00"
+        },
+        {
+            "name": "symfony/polyfill-mbstring",
+            "version": "v1.11.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/symfony/polyfill-mbstring.git",
+                "reference": "fe5e94c604826c35a32fa832f35bd036b6799609"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/symfony/polyfill-mbstring/zipball/fe5e94c604826c35a32fa832f35bd036b6799609",
+                "reference": "fe5e94c604826c35a32fa832f35bd036b6799609",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.3"
+            },
+            "suggest": {
+                "ext-mbstring": "For best performance"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.11-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Symfony\\Polyfill\\Mbstring\\": ""
+                },
+                "files": [
+                    "bootstrap.php"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Nicolas Grekas",
+                    "email": "p@tchwork.com"
+                },
+                {
+                    "name": "Symfony Community",
+                    "homepage": "https://symfony.com/contributors"
+                }
+            ],
+            "description": "Symfony polyfill for the Mbstring extension",
+            "homepage": "https://symfony.com",
+            "keywords": [
+                "compatibility",
+                "mbstring",
+                "polyfill",
+                "portable",
+                "shim"
+            ],
+            "time": "2019-02-06T07:57:58+00:00"
+        },
+        {
+            "name": "symfony/polyfill-php72",
+            "version": "v1.11.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/symfony/polyfill-php72.git",
+                "reference": "ab50dcf166d5f577978419edd37aa2bb8eabce0c"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/symfony/polyfill-php72/zipball/ab50dcf166d5f577978419edd37aa2bb8eabce0c",
+                "reference": "ab50dcf166d5f577978419edd37aa2bb8eabce0c",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.3"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.11-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Symfony\\Polyfill\\Php72\\": ""
+                },
+                "files": [
+                    "bootstrap.php"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Nicolas Grekas",
+                    "email": "p@tchwork.com"
+                },
+                {
+                    "name": "Symfony Community",
+                    "homepage": "https://symfony.com/contributors"
+                }
+            ],
+            "description": "Symfony polyfill backporting some PHP 7.2+ features to lower PHP versions",
+            "homepage": "https://symfony.com",
+            "keywords": [
+                "compatibility",
+                "polyfill",
+                "portable",
+                "shim"
+            ],
+            "time": "2019-02-06T07:57:58+00:00"
         }
     ],
     "packages-dev": [],
-    "aliases": [],
+    "aliases": [
+        {
+            "alias": "1.3.1-dev",
+            "alias_normalized": "1.3.1.0-dev",
+            "version": "dev-develop",
+            "package": "exodus4d/pathfinder_esi"
+        }
+    ],
     "minimum-stability": "stable",
-    "stability-flags": [],
+    "stability-flags": {
+        "exodus4d/pathfinder_esi": 20
+    },
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
@@ -1626,8 +2157,7 @@
         "ext-curl": "*",
         "ext-json": "*",
         "ext-mbstring": "*",
-        "ext-ctype": "*",
-        "ext-zmq": ">=1.1.3"
+        "ext-ctype": "*"
     },
     "platform-dev": []
 }
