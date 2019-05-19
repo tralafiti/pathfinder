@@ -317,7 +317,9 @@ $mapBubbleWidth:        30px;
       }
 
       .pf-system-head-tag{
-        margin-right: 5px;
+        cursor: -moz-grab;
+        cursor: -webkit-grab;
+        cursor: grab;
       }
 
       .pf-system-effect{
@@ -465,6 +467,10 @@ $mapBubbleWidth:        30px;
   .pf-system-locked{
 
     .pf-system-sec{
+      cursor: default !important;
+    }
+
+    .pf-system-head-tag{
       cursor: default !important;
     }
 

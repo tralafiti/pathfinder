@@ -388,6 +388,11 @@ define([
             let effectBasicClass = MapUtil.getEffectInfoForSystem('effect', 'class');
             let effectClass = MapUtil.getEffectInfoForSystem(data.effect, 'class');
             let secClass = Util.getSecurityClassForSystem(data.security);
+            const securityMapping = {
+              '0.0': 'NS',
+              'L': 'LS',
+              'H': 'HS'
+            };
 
             system = $('<div>', {
                 id: systemId,
@@ -397,12 +402,12 @@ define([
                     class: config.systemHeadClass
                 }).append(
                     $('<span>', {
-                        class: [config.systemSec, secClass].join(' '),
-                        text: data.security
-                    }),
-                    $('<span>', {
                         class: [config.systemHeadTagClass, secClass].join(' ')
                     }).attr('data-value', data.tag),
+                    $('<span>', {
+                        class: [config.systemSec, secClass].join(' '),
+                        text: securityMapping.hasOwnProperty(data.security) ? securityMapping[data.security] : data.security
+                    }),
                     // System name is editable
                     $('<span>', {
                         class: systemHeadClasses.join(' '),
@@ -1583,7 +1588,7 @@ define([
             showbuttons: false,
             display: function (value) {
                 if(String(value).length) {
-                    value = ' | ' + value;
+                    value += ' ';
                 }
                 $(this).text(value);
             }

@@ -7,7 +7,7 @@
 ;           e.g. public/js/vX.X.X/app.js
 ; Syntax:   String (current version)
 ; Default:  v1.5.1
-VERSION                     =   v1.5.1-t
+VERSION                     =   v1.5.1.2-t
 
 ; Show warning on 'login' page if /setup route is active
 ;           DO NOT disable this warning unless /setup route is protected or commented in routes.ini
