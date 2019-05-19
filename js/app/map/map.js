@@ -406,7 +406,7 @@ define([
                     // System name is editable
                     $('<span>', {
                         class: systemHeadClasses.join(' '),
-                    }).attr('data-value', systemName),
+                    }).attr('data-value', systemName).attr('title', data.name),
                     // System locked status
                     $('<i>', {
                         class: ['fas', 'fa-lock', 'fa-fw'].join(' ')
@@ -517,8 +517,7 @@ define([
 
             let tag = system.getSystemInfo(['tag']);
             if(tag !== data.tag){
-                // tag changed
-                system.find('.' + config.systemHeadTagClass).editable('setValue', tag);
+                system.find('.' + config.systemHeadTagClass).editable('setValue', data.tag);
             }
         }
 
@@ -1584,7 +1583,7 @@ define([
             showbuttons: false,
             display: function (value) {
                 if(String(value).length) {
-                    value = '.' + value;
+                    value = ' | ' + value;
                 }
                 $(this).text(value);
             }
