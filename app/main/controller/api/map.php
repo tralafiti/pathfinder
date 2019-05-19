@@ -11,6 +11,7 @@ namespace Controller\Api;
 use Controller;
 use data\file\FileHandler;
 use lib\Config;
+use lib\SystemTag;
 use Model\AbstractModel;
 use Model\Pathfinder;
 use Model\Universe;
@@ -774,7 +775,7 @@ class Map extends Controller\AccessController {
                         foreach($systems as $i => $systemData){
                             // check if current system belongs to the current map
                             if($system = $map->getSystemById((int)$systemData['id'])){
-                                $system->copyfrom($systemData, ['alias', 'status', 'position', 'locked', 'rallyUpdated', 'rallyPoke']);
+                                $system->copyfrom($systemData, ['alias', 'tag', 'status', 'position', 'locked', 'rallyUpdated', 'rallyPoke']);
                                 if($system->save($activeCharacter)){
                                     $mapChanged = true;
                                     // one system belongs to ONE  map -> speed up for multiple maps
@@ -1067,6 +1068,7 @@ class Map extends Controller\AccessController {
                         $targetSystem &&
                         !$targetExists
                     ){
+                        $targetSystem->tag = SystemTag::generateFor($targetSystem, $sourceSystem, $map);
                         $targetSystem = $map->saveSystem($targetSystem, $character, $systemPosX, $systemPosY);
                         // get updated maps object
                         if($targetSystem){

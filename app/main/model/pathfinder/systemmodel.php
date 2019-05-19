@@ -82,6 +82,11 @@ class SystemModel extends AbstractMapTrackingModel {
             'default' => '',
             'activity-log' => true
         ],
+        'tag' => [
+            'type' => Schema::DT_VARCHAR128,
+            'nullable' => false,
+            'default' => '',
+        ],
         'typeId' => [
             'type' => Schema::DT_INT,
             'index' => true,
@@ -176,6 +181,7 @@ class SystemModel extends AbstractMapTrackingModel {
             $systemData->mapId                  = is_object($this->mapId) ? $this->get('mapId', true) : 0;
             $systemData->systemId               = $this->systemId;
             $systemData->alias                  = $this->alias;
+            $systemData->tag                    = $this->tag;
 
             if(is_object($this->typeId)){
                 $systemData->type               = $this->typeId->getData();

@@ -24,6 +24,18 @@ VERSION                     =   v1.5.1-t
 ; Default:  0
 PERSISTENT_DB_CONNECTIONS   =   1
 
+[PATHFINDER.SYSTEMTAG]
+; Systemtag status
+;           If enabled new systems will be tagged using the defined style
+; Syntax:   0 | 1
+; Default:  0
+STATUS                      =   1
+
+; Naming scheme to use
+; Syntax:   String
+; Default:  countConnections
+STYLE                       =   countConnections
+
 [routes]
 ; Disables /setup: Overwrite route with a redirect to @login
 ; Commend out to ENABLE setup
