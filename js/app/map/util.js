@@ -262,6 +262,20 @@ define([
     };
 
     /**
+     * get text to display for system security
+     * @param system
+     * @returns {string}
+     */
+    let getSystemSecurityForDisplay = (security) => {
+        const securityMapping = {
+            '0.0': 'NS',
+            'L': 'LS',
+            'H': 'HS'
+        };
+        return securityMapping.hasOwnProperty(security) ? securityMapping[security] : security;
+    };
+
+    /**
      * flag map component (map, system, connection) as "changed"
      * @param component
      */
@@ -1802,6 +1816,7 @@ define([
         getSystemData: getSystemData,
         getSystemTypeInfo: getSystemTypeInfo,
         getEffectInfoForSystem: getEffectInfoForSystem,
+        getSystemSecurityForDisplay: getSystemSecurityForDisplay,
         markAsChanged: markAsChanged,
         hasChanged: hasChanged,
         toggleSystemsSelect: toggleSystemsSelect,

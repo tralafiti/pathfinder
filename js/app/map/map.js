@@ -388,11 +388,6 @@ define([
             let effectBasicClass = MapUtil.getEffectInfoForSystem('effect', 'class');
             let effectClass = MapUtil.getEffectInfoForSystem(data.effect, 'class');
             let secClass = Util.getSecurityClassForSystem(data.security);
-            const securityMapping = {
-              '0.0': 'NS',
-              'L': 'LS',
-              'H': 'HS'
-            };
 
             system = $('<div>', {
                 id: systemId,
@@ -406,7 +401,7 @@ define([
                     }).attr('data-value', data.tag),
                     $('<span>', {
                         class: [config.systemSec, secClass].join(' '),
-                        text: securityMapping.hasOwnProperty(data.security) ? securityMapping[data.security] : data.security
+                        text: MapUtil.getSystemSecurityForDisplay(data.security)
                     }),
                     // System name is editable
                     $('<span>', {
@@ -450,7 +445,7 @@ define([
             if(data.statics){
                 system.find('.' + config.systemBodyItemPilots).css('max-width', 88 - 18 * data.statics.length);
                 let systemBody = system.find('.' + config.systemBodyClass);
-                for(let i = 0; i < data.statics.length; i++){
+                for(let i = data.statics.length; i >= 0; i--){
                     let staticData = Object.assign({}, Init.wormholes[data.statics[i]]);
                     staticData.class = Util.getSecurityClassForSystem( staticData.security );
 
@@ -458,7 +453,7 @@ define([
                         $('<span>', {
                             class: [config.systemBodyItemStatic, staticData.class, Util.config.popoverTriggerClass].join(' '),
                             'data-name': staticData.name,
-                            text: staticData.security
+                            text:  MapUtil.getSystemSecurityForDisplay(staticData.security)
                         })
                     );
                 }
@@ -1972,10 +1967,10 @@ define([
             let system = $(this);
             let target = $(e.target);
 
-            if(target.hasClass('pf-system-sec') || target.hasClass('pf-system-head-tag')) {
-                target = system.find('.pf-system-head-tag');
+            if(target.hasClass(config.systemHeadNameClass)) {
+                target = system.find('.' + config.systemHeadNameClass);
             } else {
-                target = $(system).find('.' + config.systemHeadNameClass);
+                target = system.find('.' + config.systemHeadTagClass);
             }
 
             if(!target.hasClass('editable')) {
