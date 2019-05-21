@@ -930,8 +930,10 @@ class Map extends Controller\AccessController {
             $targetExists = true;
 
             // system coordinates
-            $systemOffsetX = 130;
+            $systemOffsetX = 140;
             $systemOffsetY = 0;
+            $systemDeclutterX = 0;
+            $systemDeclutterY = 40;
             $systemPosX = 0;
             $systemPosY = 30;
 
@@ -1068,6 +1070,23 @@ class Map extends Controller\AccessController {
                         $targetSystem &&
                         !$targetExists
                     ){
+                        // don't position new system over an existing system
+                        $tries = 0;
+                        do {
+                            $tries++;
+                            $modified = false;
+                            foreach($map->getSystemsData() as $system) {
+                                // do we have a system with the same X and Y position on this map?
+                                if($system->position->x === $systemPosX && $system->position->y === $systemPosY) {
+                                    // yes -> move and restart check
+                                    $systemPosX += $systemDeclutterX;
+                                    $systemPosY += $systemDeclutterY;
+                                    $modified = true;
+                                    break;
+                                }
+                            }
+                        } while ($tries < 10 && $modified);
+
                         $targetSystem->tag = SystemTag::generateFor($targetSystem, $sourceSystem, $map);
                         $targetSystem = $map->saveSystem($targetSystem, $character, $systemPosX, $systemPosY);
                         // get updated maps object
