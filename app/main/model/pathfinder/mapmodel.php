@@ -8,6 +8,7 @@
 
 namespace Model\Pathfinder;
 
+use DB\CortexCollection;
 use DB\SQL\Schema;
 use data\file\FileHandler;
 use Exception\ConfigException;
@@ -614,36 +615,27 @@ class MapModel extends AbstractMapTrackingModel {
     }
 
     /**
-     * get all connections in this map
+     * get connections in this map
+     * -> $connectionIds can be used for filter
      * @param null $connectionIds
      * @param string $scope
-     * @return ConnectionModel[]
+     * @return CortexCollection|array
      */
     public function getConnections($connectionIds = null, $scope = ''){
-        $connections = [];
-
-        $query = [
-            'active = :active AND source > 0 AND target > 0',
-            ':active' => 1
+        $filters = [
+            self::getFilter('source', 0, '>'),
+            self::getFilter('target', 0, '>')
         ];
 
         if(!empty($scope)){
-            $query[0] .= ' AND scope = :scope';
-            $query[':scope'] = $scope;
+            $filters[] = self::getFilter('scope', $scope);
         }
 
         if(!empty($connectionIds)){
-            $query[0] .= ' AND id IN (?)';
-            $query[] =  $connectionIds;
+            $filters[] = self::getFilter('id', $connectionIds, 'IN');
         }
 
-        $this->filter('connections', $query);
-
-        if($this->connections){
-            $connections = $this->connections;
-        }
-
-        return $connections;
+        return $this->relFind('connections', $this->mergeFilter($filters)) ? : [];
     }
 
     /**
@@ -658,7 +650,7 @@ class MapModel extends AbstractMapTrackingModel {
             /**
              * @var $connection ConnectionModel
              */
-            $connectionData[] = $connection->getData();
+            $connectionData[] = $connection->getData(true);
         }
 
         return $connectionData;
@@ -977,7 +969,7 @@ class MapModel extends AbstractMapTrackingModel {
      * @return logging\LogInterface
      * @throws ConfigException
      */
-    public function newLog($action = '') : Logging\LogInterface{
+    public function newLog(string $action = '') : Logging\LogInterface{
         $logChannelData = $this->getLogChannelData();
         $logObjectData = $this->getLogObjectData();
         $log = (new logging\MapLog($action, $logChannelData))->setTempData($logObjectData);
@@ -1303,32 +1295,30 @@ class MapModel extends AbstractMapTrackingModel {
      * @param SystemModel $targetSystem
      * @return ConnectionModel|null
      */
-    public function searchConnection(SystemModel $sourceSystem, SystemModel $targetSystem){
+    public function searchConnection(SystemModel $sourceSystem, SystemModel $targetSystem) : ?ConnectionModel {
+        $connection = null;
+
         // check if both systems belong to this map
         if(
-            $sourceSystem->get('mapId', true) === $this->id &&
-            $targetSystem->get('mapId', true) === $this->id
+            $sourceSystem->get('mapId', true) === $this->_id &&
+            $targetSystem->get('mapId', true) === $this->_id
         ){
-            $this->filter('connections', [
-                'active = :active AND
-            (
-                (
-                    source = :sourceId AND
-                    target = :targetId
-                ) OR (
-                    source = :targetId AND
-                    target = :sourceId
-                )
-            )',
-                ':active' => 1,
-                ':sourceId' => $sourceSystem->id,
-                ':targetId' => $targetSystem->id,
-            ], ['limit'=> 1]);
+            $filter = $this->mergeFilter([
+                $this->mergeFilter([self::getFilter('source', $sourceSystem->id, 'A'), self::getFilter('target', $targetSystem->id, '=', 'A')]),
+                $this->mergeFilter([self::getFilter('source', $targetSystem->id, 'B'), self::getFilter('target', $sourceSystem->id, '=', 'B')])
+            ], 'or');
 
-            return ($this->connections) ? reset($this->connections) : null;
-        }else{
-            return null;
+            $connection = $this->relFindOne('connections', $filter);
         }
+
+        return $connection;
+    }
+
+    /**
+     * @see parent
+     */
+    public function filterRel() : void {
+        $this->filter('connections', self::getFilter('active', true));
     }
 
     /**
@@ -1447,7 +1437,7 @@ class MapModel extends AbstractMapTrackingModel {
      * get all maps
      * @param array $mapIds
      * @param array $options
-     * @return \DB\CortexCollection
+     * @return CortexCollection
      */
     public static function getAll($mapIds = [], $options = []){
         $query = [

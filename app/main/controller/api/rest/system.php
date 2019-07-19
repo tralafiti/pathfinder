@@ -36,7 +36,7 @@ class System extends AbstractRestController {
             ){
                 $systemData = $system->getData();
                 $systemData->signatures = $system->getSignaturesData();
-                $systemData->sigHistory = $system->getSignaturesHistoryData();
+                $systemData->sigHistory = $system->getSignaturesHistory();
                 $systemData->structures = $system->getStructuresData();
             }
         }
@@ -144,7 +144,7 @@ class System extends AbstractRestController {
                 }
                 // broadcast map changes
                 if(count($deletedSystemIds)){
-                    $this->broadcastMapData($map);
+                    $this->broadcastMap($map);
                 }
             }
         }
@@ -187,7 +187,7 @@ class System extends AbstractRestController {
         $newSystem->clearCacheData();
 
         // broadcast map changes
-        $this->broadcastMapData($newSystem->mapId);
+        $this->broadcastMap($newSystem->mapId);
 
         return $newSystem;
     }
