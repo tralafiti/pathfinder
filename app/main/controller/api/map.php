@@ -949,7 +949,7 @@ class Map extends Controller\AccessController {
             $targetSystemId = (int)$targetLog->systemId;
 
             // get 'character log' from source system. If not log found -> assume $sourceLog == $targetLog
-            $sourceLog = $character->getLogPrevSystem($targetSystemId) ? : $targetLog;
+            $sourceLog = $character->getLogPrevSystem($map->_id, $targetSystemId) ? : $targetLog;
             $sourceSystemId = (int)$sourceLog->systemId;
 
             if($sourceSystemId){
@@ -1023,12 +1023,12 @@ class Map extends Controller\AccessController {
                             break;
                         case 'k-space':
                             if($sameSystem){
-                                if( !$sourceSystem->isWormhole() ){
+                                if($sourceSystem->isKspace()){
                                     $addSourceSystem = true;
                                 }
                             }elseif(
-                                !$sourceSystem->isWormhole() ||
-                                !$targetSystem->isWormhole()
+                                $sourceSystem->isKspace() ||
+                                $targetSystem->isKspace()
                             ){
                                 $addSourceSystem = true;
                                 $addTargetSystem = true;
@@ -1038,7 +1038,7 @@ class Map extends Controller\AccessController {
                         case 'wh':
                         default:
                             if($sameSystem){
-                                if( $sourceSystem->isWormhole() ){
+                                if($sourceSystem->isWormhole()){
                                     $addSourceSystem = true;
                                 }
                             }elseif(

@@ -264,7 +264,7 @@ class SystemModel extends AbstractMapTrackingModel {
     /**
      * get static system data by key
      * @param string $key
-     * @return null
+     * @return mixed|null
      * @throws \Exception
      */
     private function getStaticSystemValue(string $key){
@@ -489,15 +489,21 @@ class SystemModel extends AbstractMapTrackingModel {
     public function beforeUpdateEvent($self, $pkeys) : bool {
         $status = parent::beforeUpdateEvent($self, $pkeys);
 
-        if( !$self->isActive()){
+        if($status && !$self->isActive()){
             // reset "rally point" fields
             $self->rallyUpdated = 0;
             $self->rallyPoke = false;
 
             // delete connections
-            $connections = $self->getConnections();
-            foreach($connections as $connection){
+            foreach($self->getConnections() as $connection){
                 $connection->erase();
+            }
+
+            // delete signatures
+            if(!$self->getMap()->persistentSignatures){
+                foreach($self->getSignatures() as $signature){
+                    $signature->erase();
+                }
             }
         }
 
@@ -551,7 +557,7 @@ class SystemModel extends AbstractMapTrackingModel {
     /**
      * @return MapModel
      */
-    public function getMap() : MapModel{
+    public function getMap() : MapModel {
         return $this->get('mapId');
     }
 
@@ -568,14 +574,10 @@ class SystemModel extends AbstractMapTrackingModel {
      * delete a system from a map
      * hint: signatures and connections will be deleted on cascade
      * @param CharacterModel $characterModel
+     * @return bool
      */
     public function delete(CharacterModel $characterModel){
-        if( !$this->dry() ){
-            // check if character has access
-            if($this->hasAccess($characterModel)){
-                $this->erase();
-            }
-        }
+        return ($this->valid() && $this->hasAccess($characterModel)) ? $this->erase() : false;
     }
 
     /**
@@ -660,7 +662,7 @@ class SystemModel extends AbstractMapTrackingModel {
     }
 
     /**
-     * check whether this system is a wormhole
+     * check whether this system is in w-space
      * @return bool
      */
     public function isWormhole() : bool {
@@ -668,7 +670,15 @@ class SystemModel extends AbstractMapTrackingModel {
     }
 
     /**
-     * check whether this system is an Abyss system
+     * check whether this system is in k-space
+     * @return bool
+     */
+    public function isKspace() : bool {
+        return ($this->typeId->id === 2);
+    }
+
+    /**
+     * check whether this system is in a-space
      * @return bool
      */
     public function isAbyss() : bool {

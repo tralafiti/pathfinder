@@ -764,17 +764,27 @@ class Controller {
                 $return->error[] = $error;
                 echo json_encode($return);
             }else{
+                // non AJAX (e.g. GET/POST)
+                // recursively clear existing output buffers
+                while(ob_get_level()){
+                    ob_end_clean();
+                }
+
                 $f3->set('tplPageTitle', 'ERROR - ' . $error->code);
                 // set error data for template rendering
                 $error->redirectUrl = $this->getRouteUrl();
                 $f3->set('errorData', $error);
 
+                // 4xx/5xx error -> set error page template
                 if( preg_match('/^4[0-9]{2}$/', $error->code) ){
-                    // 4xx error -> render error page
                     $f3->set('tplPageContent', Config::getPathfinderData('STATUS.4XX') );
                 }elseif( preg_match('/^5[0-9]{2}$/', $error->code) ){
                     $f3->set('tplPageContent', Config::getPathfinderData('STATUS.5XX'));
                 }
+
+                // stop script - die(); after this fkt is done
+                // -> unload() fkt is still called
+                $f3->set('HALT', true);
             }
         }
 
@@ -860,7 +870,8 @@ class Controller {
      */
     static function getRequestHeaders() : array {
         $headers = [];
-
+        $headerPrefix = 'http_';
+        $prefixLength = mb_strlen($headerPrefix);
         $serverData = self::getServerData();
 
         if(
@@ -875,8 +886,9 @@ class Controller {
             // Therefore we can´t use this for all servers
             // https://github.com/exodus4d/pathfinder/issues/58
             foreach($_SERVER as $name => $value){
-                if(substr($name, 0, 5) == 'HTTP_'){
-                    $headers[str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))))] = $value;
+                $name = mb_strtolower($name);
+                if(mb_substr($name, 0, $prefixLength) == $headerPrefix){
+                    $headers[mb_convert_case(str_replace('_', '-', mb_substr($name, $prefixLength)), MB_CASE_TITLE)] = $value;
                 }
             }
         }

@@ -92,6 +92,12 @@ class MapModel extends AbstractMapTrackingModel {
             'default' => 1,
             'activity-log' => true
         ],
+        'persistentSignatures' => [
+            'type' => Schema::DT_BOOL,
+            'nullable' => false,
+            'default' => 1,
+            'activity-log' => true
+        ],
         'logActivity' => [
             'type' => Schema::DT_BOOL,
             'nullable' => false,
@@ -216,6 +222,7 @@ class MapModel extends AbstractMapTrackingModel {
             $mapData->deleteExpiredConnections              = $this->deleteExpiredConnections;
             $mapData->deleteEolConnections                  = $this->deleteEolConnections;
             $mapData->persistentAliases                     = $this->persistentAliases;
+            $mapData->persistentSignatures                  = $this->persistentSignatures;
 
             // map scope
             $mapData->scope                                 = (object) [];
@@ -790,12 +797,11 @@ class MapModel extends AbstractMapTrackingModel {
     public function hasAccess(CharacterModel $characterModel) : bool {
         $hasAccess = false;
 
-        if( !$this->dry() ){
+        if($this->valid()){
             // get all maps the user has access to
             // this includes corporation and alliance maps
-            $maps = $characterModel->getMaps();
-            foreach($maps as $map){
-                if($map->id === $this->id){
+            foreach($characterModel->getMaps() as $map){
+                if($map->_id === $this->_id){
                     $hasAccess = true;
                     break;
                 }
@@ -1304,8 +1310,8 @@ class MapModel extends AbstractMapTrackingModel {
             $targetSystem->get('mapId', true) === $this->_id
         ){
             $filter = $this->mergeFilter([
-                $this->mergeFilter([self::getFilter('source', $sourceSystem->id, 'A'), self::getFilter('target', $targetSystem->id, '=', 'A')]),
-                $this->mergeFilter([self::getFilter('source', $targetSystem->id, 'B'), self::getFilter('target', $sourceSystem->id, '=', 'B')])
+                $this->mergeFilter([self::getFilter('source', $sourceSystem->id, '=', 'A'), self::getFilter('target', $targetSystem->id, '=', 'A')]),
+                $this->mergeFilter([self::getFilter('source', $targetSystem->id, '=', 'B'), self::getFilter('target', $sourceSystem->id, '=', 'B')])
             ], 'or');
 
             $connection = $this->relFindOne('connections', $filter);
