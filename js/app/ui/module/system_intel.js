@@ -53,7 +53,7 @@ define([
      * @param statusData
      * @returns {string}
      */
-    let getStatusData = (statusData) => {
+    let getStatusData = statusData => {
         return '<i class="fas fa-fw fa-circle ' + statusData.class + '" title="' + statusData.label + '"></i>';
     };
 
@@ -430,7 +430,7 @@ define([
                     name: 'status',
                     title: '',
                     width: 2,
-                    class: 'text-center',
+                    className: ['text-center', 'all'].join(' '),
                     data: 'status',
                     render: {
                         display: data => getStatusData(data),
@@ -445,7 +445,7 @@ define([
                     title: '',
                     width: 26,
                     orderable: false,
-                    className: [config.tableCellImageClass, 'text-center'].join(' '),
+                    className: [config.tableCellImageClass, 'text-center', 'all'].join(' '),
                     data: 'structure.id',
                     defaultContent: '<i class="fas fa-question txt-color txt-color-orangeDark"></i>',
                     render: {
@@ -462,7 +462,7 @@ define([
                     name: 'structureType',
                     title: 'type',
                     width: 30,
-                    className: [config.tableCellEllipsisClass].join(' '),
+                    className: [config.tableCellEllipsisClass, 'all'].join(' '),
                     data: 'structure.name',
                     defaultContent: '<i class="fas fa-question txt-color txt-color-orangeDark"></i>',
                 },{
@@ -470,7 +470,7 @@ define([
                     name: 'name',
                     title: 'name',
                     width: 60,
-                    className: [config.tableCellEllipsisClass].join(' '),
+                    className: [config.tableCellEllipsisClass, 'all'].join(' '),
                     data: 'name'
                 },{
                     targets: 4,
@@ -478,7 +478,7 @@ define([
                     title: '',
                     width: 26,
                     orderable: false,
-                    className: [config.tableCellImageClass, 'text-center'].join(' '),
+                    className: [config.tableCellImageClass, 'text-center', 'all'].join(' '),
                     data: 'owner.id',
                     defaultContent: '<i class="fas fa-question txt-color txt-color-orangeDark"></i>',
                     render: {
@@ -497,14 +497,14 @@ define([
                     name: 'ownerName',
                     title: 'owner',
                     width: 50,
-                    className: [config.tableCellEllipsisClass].join(' '),
+                    className: [config.tableCellEllipsisClass, 'all'].join(' '),
                     data: 'owner.name',
                     defaultContent: '<i class="fas fa-question txt-color txt-color-orangeDark"></i>',
                 },{
                     targets: 6,
                     name: 'note',
                     title: 'note',
-                    className: [config.tableCellEllipsisClass].join(' '),
+                    className: [config.tableCellEllipsisClass, 'all'].join(' '),
                     data: 'description'
                 },{
                     targets: 7,
@@ -519,7 +519,7 @@ define([
                     title: '',
                     orderable: false,
                     width: 10,
-                    class: ['text-center', config.dataTableActionCellClass, config.moduleHeadlineIconClass].join(' '),
+                    className: ['text-center', config.dataTableActionCellClass, config.moduleHeadlineIconClass, 'all'].join(' '),
                     data: null,
                     render: {
                         display: data => {
@@ -550,7 +550,7 @@ define([
                     title: '',
                     orderable: false,
                     width: 10,
-                    class: ['text-center', config.dataTableActionCellClass].join(' '),
+                    className: ['text-center', config.dataTableActionCellClass, 'all'].join(' '),
                     data: null,
                     render: {
                         display: data => {
@@ -607,6 +607,7 @@ define([
                 },{
                     targets: 10,
                     name: 'corporation',
+                    className: 'never',     // never show this column. see: https://datatables.net/extensions/responsive/classes
                     data: 'corporation',
                     visible: false,
                     render: {
@@ -760,12 +761,12 @@ define([
             let currentLocationData = Util.getCurrentLocationData();
             if(
                 currentLocationData.id &&
-                currentLocationData.id !== systemData.id
+                currentLocationData.id !== systemData.systemId
             ){
                 let systemNameStr = (systemData.name === systemData.alias) ? '"' + systemData.name + '"' : '"' + systemData.alias + '" (' + systemData.name + ')';
                 systemNameStr = '<span class="txt-color txt-color-warning">' + systemNameStr + '</span>';
 
-                let msg = 'Update structures in ' + systemNameStr + ' ? This not your current location, "' + currentLocationData.name + '" !';
+                let msg = 'Update structures in ' + systemNameStr + ' ? This is not your current location, "' + currentLocationData.name + '" !';
                 bootbox.confirm(msg, result => {
                     if(result){
                         saveStructureData(structureData, context);

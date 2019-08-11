@@ -8,14 +8,24 @@
 
 namespace Model\Pathfinder;
 
-use Controller\Api\User as User;
-use Controller\Controller as Controller;
+
 use DB\SQL\Schema;
 
+/**
+ * Class CharacterLogModel
+ * @package Model\Pathfinder
+ * @property CharacterModel $characterId
+ */
 class CharacterLogModel extends AbstractPathfinderModel {
 
+    /**
+     * @var string
+     */
     protected $table = 'character_log';
 
+    /**
+     * @var array
+     */
     protected $fieldConf = [
         'active' => [
             'type' => Schema::DT_BOOL,
@@ -38,32 +48,37 @@ class CharacterLogModel extends AbstractPathfinderModel {
         'systemId' => [
             'type' => Schema::DT_INT,
             'index' => true,
-            'activity-log' =>  true
+            'activity-log' => true,
+            'validate' => 'notEmpty'
         ],
         'systemName' => [
             'type' => Schema::DT_VARCHAR128,
             'nullable' => false,
-            'default' => ''
+            'default' => '',
+            'activity-log' => true,
+            'validate' => 'notEmpty'
         ],
         'shipTypeId' => [
             'type' => Schema::DT_INT,
             'index' => true,
-            'activity-log' =>  true
+            'activity-log' => true
         ],
         'shipTypeName' => [
             'type' => Schema::DT_VARCHAR128,
             'nullable' => false,
-            'default' => ''
+            'default' => '',
+            'activity-log' => true
         ],
         'shipId' => [
             'type' => Schema::DT_BIGINT,
             'index' => true,
-            'activity-log' =>  true
+            'activity-log' => true
         ],
         'shipMass' => [
             'type' => Schema::DT_FLOAT,
             'nullable' => false,
-            'default' => 0
+            'default' => 0,
+            'activity-log' => true
         ],
         'shipName' => [
             'type' => Schema::DT_VARCHAR128,
@@ -73,22 +88,24 @@ class CharacterLogModel extends AbstractPathfinderModel {
         'stationId' => [
             'type' => Schema::DT_INT,
             'index' => true,
-            'activity-log' =>  true
+            'activity-log' => true
         ],
         'stationName' => [
             'type' => Schema::DT_VARCHAR128,
             'nullable' => false,
-            'default' => ''
+            'default' => '',
+            'activity-log' => true
         ],
         'structureId' => [
             'type' => Schema::DT_BIGINT,
             'index' => true,
-            'activity-log' =>  true
+            'activity-log' => true
         ],
         'structureName' => [
             'type' => Schema::DT_VARCHAR128,
             'nullable' => false,
-            'default' => ''
+            'default' => '',
+            'activity-log' => true
         ]
     ];
 
@@ -139,10 +156,10 @@ class CharacterLogModel extends AbstractPathfinderModel {
     }
 
     /**
-     * get all character log data
-     * @return object
+     * get character log data
+     * @return \stdClass
      */
-    public function getData(){
+    public function getData() : \stdClass {
 
         $logData                        = (object) [];
         $logData->system                = (object) [];
@@ -168,16 +185,11 @@ class CharacterLogModel extends AbstractPathfinderModel {
     }
 
     /**
-     *  setter for systemId
-     * @param int $systemId
-     * @return int
-     * @throws \Exception
+     * get 'character log' data as array
+     * @return array
      */
-    public function set_systemId($systemId){
-        if($systemId > 0){
-            $this->updateCharacterSessionLocation($systemId);
-        }
-        return $systemId;
+    public function getDataAsArray() : array {
+        return json_decode(json_encode($this->getData()), true);
     }
 
     /**
@@ -197,6 +209,8 @@ class CharacterLogModel extends AbstractPathfinderModel {
      * @param $pkeys
      */
     public function afterUpdateEvent($self, $pkeys){
+        $self->updateLogsHistory('update');
+
         // check if any "relevant" column has changed
         if(!empty($this->fieldChanges)){
             $self->clearCacheData();
@@ -210,6 +224,7 @@ class CharacterLogModel extends AbstractPathfinderModel {
      * @param $pkeys
      */
     public function afterEraseEvent($self, $pkeys){
+        $self->deleteLogsHistory();
         $self->clearCacheData();
     }
 
@@ -229,30 +244,25 @@ class CharacterLogModel extends AbstractPathfinderModel {
     }
 
     /**
-     * update session data for active character
-     * @param int $systemId
-     * @throws \Exception
+     * update 'character log' history data
+     * -> checks $this->fieldChanges
+     * @param string $action
      */
-    protected function updateCharacterSessionLocation(int $systemId){
-        $controller = new Controller();
-
+    protected function updateLogsHistory(string $action){
         if(
-            !empty($sessionCharacter = $controller->getSessionCharacterData()) &&
-            $sessionCharacter['ID'] === $this->get('characterId', true)
+            $this->valid() &&
+            is_object($this->characterId)
         ){
-            $systemChanged = false;
-            if((int)$sessionCharacter['PREV_SYSTEM_ID'] === 0){
-                $sessionCharacter['PREV_SYSTEM_ID'] = (int)$systemId;
-                $systemChanged = true;
-            }elseif((int)$sessionCharacter['PREV_SYSTEM_ID'] !== $this->systemId){
-                $sessionCharacter['PREV_SYSTEM_ID'] = $this->systemId;
-                $systemChanged = true;
-            }
+            $this->characterId->updateLogsHistory($this, $action);
+        }
+    }
 
-            if($systemChanged){
-                $sessionCharacters = CharacterModel::mergeSessionCharacterData([$sessionCharacter]);
-                $this->getF3()->set(User::SESSION_KEY_CHARACTERS, $sessionCharacters);
-            }
+    /**
+     * delete 'character log' history data
+     */
+    protected function deleteLogsHistory(){
+        if(is_object($this->characterId)){
+            $this->characterId->clearCacheDataWithPrefix(CharacterModel::DATA_CACHE_KEY_LOG_HISTORY);
         }
     }
 

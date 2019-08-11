@@ -6,8 +6,8 @@
 ;           Version is used for CSS/JS cache busting and is part of the URL for static resources:
 ;           e.g. public/js/vX.X.X/app.js
 ; Syntax:   String (current version)
-; Default:  v1.5.1
-VERSION                     =   v1.5.1-t
+; Default:  v1.5.2
+VERSION                     =   v1.5.3-t
 
 ; Show warning on 'login' page if /setup route is active
 ;           DO NOT disable this warning unless /setup route is protected or commented in routes.ini
@@ -23,6 +23,18 @@ VERSION                     =   v1.5.1-t
 ; Syntax:   0 | 1
 ; Default:  0
 PERSISTENT_DB_CONNECTIONS   =   1
+
+[PATHFINDER.SYSTEMTAG]
+; Systemtag status
+;           If enabled new systems will be tagged using the defined style
+; Syntax:   0 | 1
+; Default:  0
+STATUS                      =   1
+
+; Naming scheme to use
+; Syntax:   String
+; Default:  countConnections
+STYLE                       =   countConnections
 
 [routes]
 ; Disables /setup: Overwrite route with a redirect to @login

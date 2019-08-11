@@ -51,11 +51,10 @@ Temporary Items
 .usage
 .env
 *.gz
-*.lock
-!composer.lock
+composer-dev.lock
+package-lock.json
 /conf/*.ini
 /node_modules/
 /public/js/vX.X.X/
 /vendor/
 /history/
-/package-lock.json

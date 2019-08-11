@@ -4,6 +4,7 @@ services:
   web:
     container_name: ${COMPOSE_PROJECT_NAME}_web
     build: docker/nginx
+    restart: unless-stopped
     depends_on:
       - php
     networks:
@@ -21,6 +22,7 @@ services:
       args:
         USER_ID: ${DOCKER_USER_ID}
         PHP_ENV: ${PHP_ENV}
+    restart: unless-stopped
     depends_on:
       - db
       - redis
@@ -37,6 +39,7 @@ services:
   db:
     container_name: ${COMPOSE_PROJECT_NAME}_db
     build: docker/db
+    restart: unless-stopped
     networks:
       - net
     expose:
@@ -49,6 +52,7 @@ services:
   redis:
     container_name: ${COMPOSE_PROJECT_NAME}_redis
     build: docker/redis
+    restart: unless-stopped
     networks:
       - net
     expose:
