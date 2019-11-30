@@ -29,6 +29,6 @@ class SystemTag {
             return null;
         }
 
-        return SystemTag\CountConnections::generateFor($targetSystem, $sourceSystem, $map);
+        return $className::generateFor($targetSystem, $sourceSystem, $map);
     }
 }

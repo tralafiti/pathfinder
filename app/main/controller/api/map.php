@@ -975,8 +975,6 @@ class Map extends Controller\AccessController {
                 // system coordinates for system tha might be added next
                 $systemOffsetX = 140;
                 $systemOffsetY = 0;
-                $systemDeclutterX = 0;
-                $systemDeclutterY = 40;
                 $systemPosX = ((int)$defaultPositions[0]['x']) ? : 0;
                 $systemPosY = ((int)$defaultPositions[0]['y']) ? : 30;
 
@@ -1103,6 +1101,7 @@ class Map extends Controller\AccessController {
                         $sourceSystem &&
                         !$sourceExists
                     ){
+                        $sourceSystem->tag = SystemTag::generateFor($targetSystem, $sourceSystem, $map);
                         $sourceSystem = $map->saveSystem($sourceSystem, $character, $systemPosX, $systemPosY);
                         // get updated maps object
                         if($sourceSystem){
@@ -1127,23 +1126,6 @@ class Map extends Controller\AccessController {
                         $targetSystem &&
                         !$targetExists
                     ){
-                        // don't position new system over an existing system
-                        $tries = 0;
-                        do {
-                            $tries++;
-                            $modified = false;
-                            foreach($map->getSystemsData() as $system) {
-                                // do we have a system with the same X and Y position on this map?
-                                if($system->position->x === $systemPosX && $system->position->y === $systemPosY) {
-                                    // yes -> move and restart check
-                                    $systemPosX += $systemDeclutterX;
-                                    $systemPosY += $systemDeclutterY;
-                                    $modified = true;
-                                    break;
-                                }
-                            }
-                        } while ($tries < 10 && $modified);
-
                         $targetSystem->tag = SystemTag::generateFor($targetSystem, $sourceSystem, $map);
                         $targetSystem = $map->saveSystem($targetSystem, $character, $systemPosX, $systemPosY);
                         // get updated maps object
