@@ -20,21 +20,20 @@ class CountConnections implements SystemTagInterface
         $whConnections = array_filter($sourceSystem->getConnections(), function (ConnectionModel $connection) {
             return $connection->isWormhole();
         });
-        // add one since the new connection has not been added at this point
-        $countWhConnections = count($whConnections) + 1;
+        $countWhConnections = count($whConnections);
 
         // If the source system is locked and has statics we assume it's our home
         // First static is always "1", second always "2" etc., K-connections always start after that and count up
         $statics = $sourceSystem->get_statics();
         if($sourceSystem->locked && is_array($statics) && count($statics)) {
-            $staticData = AbstractUniverseModel::getNew('WormholeModel')->find(['name IN ?', $statics]);
-            if($staticData) {
+            $staticTypeModels = AbstractUniverseModel::getNew('TypeModel')->find(['name IN ?', preg_filter('/^/', 'Wormhole ', $statics)]);
+            if($staticTypeModels) {
                 $i = 0;
                 // Loop over statics till we find one matching the $targetSystem's security
-                foreach($staticData as $static) {
+                foreach($staticTypeModels as $static) {
                     $i++;
                     // Security of static and $targetSystem match -> tag as static number X
-                    if($targetSystem->security === $static->security) {
+                    if($targetSystem->security === $static->getWormholeData()->security) {
                         return $i;
                     }
                 }
