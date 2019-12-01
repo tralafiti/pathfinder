@@ -20,7 +20,8 @@ class CountConnections implements SystemTagInterface
         $whConnections = array_filter($sourceSystem->getConnections(), function (ConnectionModel $connection) {
             return $connection->isWormhole();
         });
-        $countWhConnections = count($whConnections);
+        // add one since the new connection has not been added at this point
+        $countWhConnections = count($whConnections) + 1;
 
         // If the source system is locked and has statics we assume it's our home
         // First static is always "1", second always "2" etc., K-connections always start after that and count up

@@ -1101,7 +1101,7 @@ class Map extends Controller\AccessController {
                         $sourceSystem &&
                         !$sourceExists
                     ){
-                        $sourceSystem->tag = SystemTag::generateFor($targetSystem, $sourceSystem, $map);
+                        $sourceSystem->tag = SystemTag::generateFor($sourceSystem, $targetSystem, $map);
                         $sourceSystem = $map->saveSystem($sourceSystem, $character, $systemPosX, $systemPosY);
                         // get updated maps object
                         if($sourceSystem){
@@ -1126,7 +1126,6 @@ class Map extends Controller\AccessController {
                         $targetSystem &&
                         !$targetExists
                     ){
-                        $targetSystem->tag = SystemTag::generateFor($targetSystem, $sourceSystem, $map);
                         $targetSystem = $map->saveSystem($targetSystem, $character, $systemPosX, $systemPosY);
                         // get updated maps object
                         if($targetSystem){
