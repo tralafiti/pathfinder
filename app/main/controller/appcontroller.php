@@ -60,7 +60,7 @@ class AppController extends Controller {
         parent::afterroute($f3);
 
         // clear all SSO related temp data
-        if( $f3->exists(Ccp\Sso::SESSION_KEY_SSO) ){
+        if($f3->exists(Ccp\Sso::SESSION_KEY_SSO)){
             $f3->clear(Ccp\Sso::SESSION_KEY_SSO);
         }
     }
