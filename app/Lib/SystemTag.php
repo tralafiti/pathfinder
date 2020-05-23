@@ -2,7 +2,7 @@
 
 namespace Exodus4D\Pathfinder\Lib;
 
-use Lib\SystemTag\SystemTagInterface;
+use Exodus4D\Pathfinder\Lib\SystemTag\SystemTagInterface;
 use Exodus4D\Pathfinder\Model\Pathfinder\MapModel;
 use Exodus4D\Pathfinder\Model\Pathfinder\SystemModel;
 
@@ -23,7 +23,7 @@ class SystemTag {
         }
 
         $style = isset($config['STYLE']) ? $config['STYLE'] : 'countConnections';
-        $className = '\\lib\\SystemTag\\' . ucfirst($style);
+        $className = '\\Exodus4D\\Pathfinder\\Lib\\SystemTag\\' . ucfirst($style);
 
         if(!class_exists($className) || !is_subclass_of($className, SystemTagInterface::class)) {
             return null;
