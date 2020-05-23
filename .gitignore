@@ -57,3 +57,4 @@ package-lock.json
 /public/js/vX.X.X/
 /vendor/
 /history/
+.sass-cache/

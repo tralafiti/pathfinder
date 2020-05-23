@@ -65,6 +65,11 @@ docker-compose exec -u www-data php composer install -o
 
 ### Development
 
+NPM
+```bash
+docker-compose -f docker-compose-dev.yml run --rm node npm install
+```
+
 Gulp watcher
 ```bash
 docker-compose -f docker-compose-dev.yml run --rm node npm run gulp
